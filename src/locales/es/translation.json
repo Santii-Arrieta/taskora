@@ -1,0 +1,13 @@
+{
+  "theme": {
+    "light": "Claro",
+    "dark": "Oscuro"
+  },
+  "language": "Idioma",
+  "profile": {
+    "theme": "Tema",
+    "language": "Idioma",
+    "settings_title": "Configuración",
+    "settings_description": "Administra las preferencias de tu cuenta."
+  }
+}
