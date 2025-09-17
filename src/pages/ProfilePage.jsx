@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getUserTypeLabel } from '@/utils/userType';
 import { Camera, User, Settings, Bell, Shield, CreditCard, Save, Loader2, Link as LinkIcon, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 const LocationPicker = lazy(() => import('@/components/LocationPicker'));
@@ -292,7 +293,7 @@ const ProfilePage = () => {
                   <Input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
                 </div>
                 <h2 className="text-xl font-bold text-center">{user.name}</h2>
-                <Badge variant="outline">{user.userType}</Badge>
+                <Badge variant="outline">{getUserTypeLabel(user.userType)}</Badge>
               </div>
               <nav className="mt-6 space-y-1">
                 {TABS.map(tab => (
