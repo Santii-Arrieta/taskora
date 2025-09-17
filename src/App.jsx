@@ -28,6 +28,7 @@ import WhyTaskoraPage from '@/pages/WhyTaskoraPage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import CommunityPage from '@/pages/CommunityPage';
 import BlogArticlePage from '@/pages/BlogArticlePage';
+import NoExportPage from '@/pages/NoExportPage';
 import { Toaster } from '@/components/ui/toaster';
 import { initMercadoPago } from '@mercadopago/sdk-react';
 import 'leaflet/dist/leaflet.css';
@@ -124,6 +125,7 @@ const AppRoutes = () => {
           <Route path="/why-taskora" element={<WhyTaskoraPage />} />
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/blog/:articleId" element={<BlogArticlePage />} />
+          <Route path="/migration" element={<NoExportPage />} />
           <Route path="/support" element={
             <PrivateRoute allowedRoles={['client', 'provider', 'ngo']}>
               <SupportPage />

@@ -14,9 +14,10 @@ export function Toaster() {
 
 	return (
 		<ToastProvider>
-			{toasts.map(({ id, title, description, action, ...props }) => {
+			{toasts.map(({ id, title, description, action, dismiss, ...rest }) => {
+				// Excluir props internas como dismiss para no pasarlas al DOM
 				return (
-					<Toast key={id} {...props}>
+					<Toast key={id} {...rest}>
 						<div className="grid gap-1">
 							{title && <ToastTitle>{title}</ToastTitle>}
 							{description && (
