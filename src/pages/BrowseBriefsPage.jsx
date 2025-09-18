@@ -64,12 +64,17 @@ const BrowseBriefsPage = () => {
     serviceType: 'all',
     searchLocation: user?.location || null,
     searchRadius: user?.searchPreferences?.radius || 50,
+    searchLocationSource: user?.location ? 'saved' : 'none',
   });
 
   useEffect(() => {
     setFilters(prev => ({
         ...prev,
-        searchLocation: user?.location || null,
+        // Only hydrate from saved profile if the current source is not 'filter'
+        ...(prev.searchLocationSource !== 'filter' ? {
+          searchLocation: user?.location || null,
+          searchLocationSource: user?.location ? 'saved' : 'none'
+        } : {}),
         searchRadius: user?.searchPreferences?.radius || 50
     }));
   }, [user]);
@@ -184,7 +189,7 @@ const BrowseBriefsPage = () => {
 
   const handleUseMyPosition = () => {
     if (user?.location) {
-        setFilters(prev => ({ ...prev, searchLocation: user.location }));
+        setFilters(prev => ({ ...prev, searchLocation: user.location, searchLocationSource: 'saved' }));
         toast({ title: 'Ubicación actualizada', description: 'Se está usando tu ubicación guardada.'});
     } else {
         toast({ title: 'Sin ubicación', description: 'No tienes una ubicación guardada en tu perfil.', variant: 'destructive'});

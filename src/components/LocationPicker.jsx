@@ -49,7 +49,29 @@ const DraggableMarker = ({ value, onChange, isDraggable = true }) => {
   );
 };
 
-const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggable = true, onSearchSubmit }) => {
+const InvalidateSizeOnMount = () => {
+  const map = useMap();
+  const containerRef = map.getContainer();
+  useEffect(() => {
+    const invalidate = () => map.invalidateSize();
+    invalidate();
+    const t = setTimeout(invalidate, 0);
+    let ro;
+    if (containerRef && 'ResizeObserver' in window) {
+      ro = new ResizeObserver(() => invalidate());
+      ro.observe(containerRef);
+    }
+    window.addEventListener('resize', invalidate);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', invalidate);
+      if (ro && containerRef) ro.unobserve(containerRef);
+    };
+  }, [map]);
+  return null;
+};
+
+const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggable = true, onSearchSubmit, height = '60vh' }) => {
   const [currentValue, setCurrentValue] = useState(value);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -104,8 +126,9 @@ const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggabl
           <Button type="submit" size="icon" variant="outline"><Search className="w-4 h-4" /></Button>
         </form>
       )}
-      <div className="h-64 w-full rounded-md overflow-hidden z-0">
+      <div className="w-full rounded-md overflow-hidden z-0" style={{ height }}>
         <MapContainer center={currentValue || [-34.6037, -58.3816]} zoom={13} style={{ height: '100%', width: '100%' }}>
+          <InvalidateSizeOnMount />
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
