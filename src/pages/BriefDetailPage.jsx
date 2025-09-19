@@ -178,11 +178,44 @@ const BriefDetailPage = () => {
     }
   };
 
-  const handleContact = () => {
-    if (user.id === author.id) return toast({ title: 'Acción no permitida', description: 'No puedes contactarte a ti mismo.', variant: 'destructive' });
+  const handleContact = async () => {
+    if (!user) {
+      toast({
+        title: 'Acción requerida',
+        description: 'Debes iniciar sesión para contactar al proveedor.',
+        variant: 'destructive',
+      });
+      return;
+    }
     
-    createConversation({ id: author.id, name: author.name, avatarKey: author.avatarKey, userType: author.userType });
-    navigate('/chat');
+    if (user.id === author.id) {
+      toast({
+        title: 'Acción no permitida',
+        description: 'No puedes contactarte a ti mismo.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const conv = await createConversation({ id: author.id, name: author.name, avatarKey: author.avatarKey, userType: author.userType });
+      if (conv) {
+        navigate('/chat');
+      } else {
+        toast({
+          title: 'Error',
+          description: 'No se pudo iniciar la conversación.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error al iniciar la conversación.',
+        variant: 'destructive',
+      });
+      console.error('Error creating conversation:', error);
+    }
   };
 
   const handleToggleFavorite = () => {

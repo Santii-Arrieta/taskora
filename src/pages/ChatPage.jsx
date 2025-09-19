@@ -22,7 +22,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 
 const ChatPage = () => {
   const { user } = useAuth();
-  const { conversations, activeConversation, setActiveConversation, sendMessage, markAsRead, chatSettings, toggleMute, toggleBlock, toggleStar, clearChat } = useChat();
+  const { conversations, activeConversation, setActiveConversation, sendMessage, markAsRead, chatSettings, toggleMute, toggleBlock, toggleStar, clearChat, refreshActiveConversationMessages, messages } = useChat();
   const { createContract } = useContract();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -43,7 +43,7 @@ const ChatPage = () => {
     if (activeConversation) {
       markAsRead(activeConversation.id);
     }
-  }, [activeConversation, activeConversation?.messages, markAsRead]);
+  }, [activeConversation, messages[activeConversation?.id]?.length, markAsRead]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();
@@ -118,7 +118,8 @@ const ChatPage = () => {
 
   const filteredConversations = conversations.filter(conv => {
     const otherParticipant = getOtherParticipant(conv);
-    return otherParticipant.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const otherName = (otherParticipant?.name || '').toLowerCase();
+    return otherName.includes(searchTerm.toLowerCase());
   });
 
   const formatTime = (timestamp) => new Date(timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -166,21 +167,69 @@ const ChatPage = () => {
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid lg:grid-cols-4 gap-6" style={{ height: 'calc(100vh - 120px)' }}>
-          <div className="lg:col-span-1"><Card className="h-full flex flex-col"><CardHeader className="pb-4"><CardTitle className="flex items-center"><MessageCircle className="w-5 h-5 mr-2" />Conversaciones</CardTitle><div className="relative mt-2"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" /></div></CardHeader><CardContent className="flex-1 overflow-y-auto p-0">{conversations.length === 0 ? <div className="p-6 text-center"><MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" /><h3 className="text-lg font-medium text-gray-900 mb-2">No hay conversaciones</h3><p className="text-gray-600 text-sm mb-4">Inicia una conversación para empezar.</p><Link to="/browse"><Button>Explorar</Button></Link></div> : <div className="space-y-1">{filteredConversations.map((conv) => { const other = getOtherParticipant(conv); const isActive = activeConversation?.id === conv.id; const unreadCount = getUnreadMessagesCount(conv); const isStarred = chatSettings.starred.includes(conv.id); return (<motion.div key={conv.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${isActive ? 'bg-blue-50 border-r-2 border-blue-500' : ''}`} onClick={() => setActiveConversation(conv)}><div className="flex items-center space-x-3"><Avatar className="w-10 h-10"><AvatarImage src={other.avatarUrl} /><AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">{other.name.charAt(0).toUpperCase()}</AvatarFallback></Avatar><div className="flex-1 min-w-0"><p className="font-medium text-gray-900 truncate flex items-center">{other.name} {isStarred && <Star className="w-3 h-3 ml-1 text-yellow-400 fill-current" />}</p>{conv.lastMessage && <p className="text-sm text-gray-600 truncate">{conv.lastMessage.senderId === user.id ? 'Tú: ' : ''}{conv.lastMessage.type === 'text' ? conv.lastMessage.content : `[${conv.lastMessage.type}]`}</p>}</div><div className="flex flex-col items-end">{conv.lastMessage && <span className="text-xs text-gray-400 mb-1">{formatTime(conv.lastMessage.timestamp)}</span>}{unreadCount > 0 && <Badge className="h-5 w-5 p-0 flex items-center justify-center">{unreadCount}</Badge>}</div></div></motion.div>); })}</div>}</CardContent></Card></div>
-          <div className="lg:col-span-3"><Card className="h-full flex flex-col">{activeConversation ? (<><CardHeader className="border-b"><div className="flex items-center justify-between"><div className="flex items-center space-x-3"><Link to={`/user/${getOtherParticipant(activeConversation).id}`}><Avatar className="w-10 h-10"><AvatarImage src={getOtherParticipant(activeConversation).avatarUrl} /><AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">{getOtherParticipant(activeConversation).name.charAt(0).toUpperCase()}</AvatarFallback></Avatar></Link><div><h3 className="font-semibold text-gray-900">{getOtherParticipant(activeConversation).name}</h3><p className="text-sm text-green-600">En línea</p></div></div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={handleToggleStar}>{chatSettings.starred.includes(activeConversation.id) ? <StarOff className="mr-2 h-4 w-4" /> : <Star className="mr-2 h-4 w-4" />} {chatSettings.starred.includes(activeConversation.id) ? 'Quitar de destacados' : 'Destacar Chat'}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleToggleMute}>{chatSettings.muted.includes(activeConversation.id) ? <Volume2 className="mr-2 h-4 w-4" /> : <VolumeX className="mr-2 h-4 w-4" />} {chatSettings.muted.includes(activeConversation.id) ? 'Activar sonido' : 'Silenciar'}</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={handleClearChat}><Trash2 className="mr-2 h-4 w-4" />Limpiar Chat</DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleToggleBlock} className="text-red-600"><Ban className="mr-2 h-4 w-4" />Bloquear</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          </div></CardHeader><div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">{(activeConversation.messages || []).map((msg, index) => { const isOwn = msg.senderId === user.id; return (<motion.div key={msg.id || index} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`flex items-end gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}><div className={`max-w-xs lg:max-w-md px-3 py-2 rounded-lg shadow-sm ${isOwn ? 'chat-bubble-sent text-white' : 'bg-white text-gray-900'}`}><MessageContent msg={msg} /></div><div className={`text-xs mt-1 ${isOwn ? 'text-right' : 'text-left'} text-gray-500 flex items-center gap-1`}>{formatTime(msg.timestamp)}{isOwn && (msg.read ? <CheckCheck className="w-4 h-4 text-blue-500" /> : <Check className="w-4 h-4" />)}</div></motion.div>); })}</div><div className="border-t p-4 bg-white"><form onSubmit={handleSendMessage} className="flex space-x-2 items-center"><input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" /><Button type="button" variant="ghost" size="icon" onClick={() => fileInputRef.current.click()}><Paperclip className="w-4 h-4" /></Button>{user.userType === 'provider' && <Dialog open={isOfferDialogOpen} onOpenChange={setIsOfferDialogOpen}><DialogTrigger asChild><Button type="button" variant="outline"><FileSignature className="w-4 h-4 mr-2" />Crear Oferta</Button></DialogTrigger><DialogContent className="sm:max-w-[480px]"><DialogHeader><DialogTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-primary"/>Crear Oferta Profesional</DialogTitle><DialogDescription>Envía una oferta formal y detallada a {getOtherParticipant(activeConversation).name}.</DialogDescription></DialogHeader><div className="py-4 space-y-4"><div className="space-y-2"><Label htmlFor="title">Título del Servicio</Label><Input id="title" placeholder="Ej: Diseño de logo y branding" value={offerData.title} onChange={(e) => setOfferData({...offerData, title: e.target.value})} /></div><div className="space-y-2"><Label htmlFor="description">Descripción detallada</Label><Textarea id="description" placeholder="Describe el alcance, entregables y plazos." value={offerData.description} onChange={(e) => setOfferData({...offerData, description: e.target.value})} /></div><div className="space-y-2"><Label htmlFor="price">Precio Total (ARS)</Label><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="price" type="number" placeholder="5000" className="pl-8" value={offerData.price} onChange={(e) => setOfferData({...offerData, price: e.target.value})} /></div></div></div><DialogFooter><Button type="button" variant="outline" onClick={() => setIsOfferDialogOpen(false)}>Cancelar</Button><Button type="button" onClick={handleSendOffer}>Enviar Oferta</Button></DialogFooter></DialogContent></Dialog>}<Input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Escribe tu mensaje..." className="flex-1" /><Button type="submit" disabled={!message.trim()}><Send className="w-4 h-4" /></Button></form></div></>) : <CardContent className="flex-1 flex items-center justify-center"><div className="text-center"><MessageCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" /><h3 className="text-xl font-medium text-gray-900 mb-2">Selecciona una conversación</h3><p className="text-gray-600">Elige una conversación para empezar a chatear.</p></div></CardContent>}</Card></div>
+          <div className="lg:col-span-1"><Card className="h-full flex flex-col"><CardHeader className="pb-4"><CardTitle className="flex items-center"><MessageCircle className="w-5 h-5 mr-2" />Conversaciones</CardTitle><div className="relative mt-2"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" /></div></CardHeader><CardContent className="flex-1 overflow-y-auto p-0">{conversations.length === 0 ? <div className="p-6 text-center"><MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" /><h3 className="text-lg font-medium text-gray-900 mb-2">No hay conversaciones</h3><p className="text-gray-600 text-sm mb-4">Inicia una conversación para empezar.</p><Link to="/browse"><Button>Explorar</Button></Link></div> : <div className="space-y-1">{filteredConversations.map((conv) => { const other = getOtherParticipant(conv); const isActive = activeConversation?.id === conv.id; const unreadCount = getUnreadMessagesCount(conv); const isStarred = chatSettings.starred.includes(conv.id); return (<motion.div key={conv.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${isActive ? 'bg-blue-50 border-r-2 border-blue-500' : ''}`} onClick={() => setActiveConversation(conv)}><div className="flex items-center space-x-3"><Avatar className="w-10 h-10"><AvatarImage src={other.avatarUrl} /><AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">{(other.name || 'U').charAt(0).toUpperCase()}</AvatarFallback></Avatar><div className="flex-1 min-w-0"><p className="font-medium text-gray-900 truncate flex items-center">{other.name || 'Usuario'} {isStarred && <Star className="w-3 h-3 ml-1 text-yellow-400 fill-current" />}</p>{conv.lastMessage && <p className="text-sm text-gray-600 truncate">{conv.lastMessage.senderId === user.id ? 'Tú: ' : ''}{conv.lastMessage.type === 'text' ? conv.lastMessage.content : `[${conv.lastMessage.type}]`}</p>}</div><div className="flex flex-col items-end">{conv.lastMessage && <span className="text-xs text-gray-400 mb-1">{formatTime(conv.lastMessage.timestamp)}</span>}{unreadCount > 0 && <Badge className="h-5 w-5 p-0 flex items-center justify-center">{unreadCount}</Badge>}</div></div></motion.div>); })}</div>}</CardContent></Card></div>
+          <div className="lg:col-span-3"><Card className="h-full flex flex-col">{activeConversation ? (<><CardHeader className="border-b py-3"><div className="flex items-center justify-between"><div className="flex items-center space-x-3"><Link to={`/user/${getOtherParticipant(activeConversation).id}`}><Avatar className="w-9 h-9"><AvatarImage src={getOtherParticipant(activeConversation).avatarUrl} /><AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">{(getOtherParticipant(activeConversation).name || 'U').charAt(0).toUpperCase()}</AvatarFallback></Avatar></Link><div><h3 className="font-semibold text-gray-900 leading-tight">{getOtherParticipant(activeConversation).name || 'Usuario'}</h3><p className="text-xs text-muted-foreground">Chat manual</p></div></div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={refreshActiveConversationMessages}>Actualizar mensajes</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={handleToggleStar}>{chatSettings.starred.includes(activeConversation.id) ? <StarOff className="mr-2 h-4 w-4" /> : <Star className="mr-2 h-4 w-4" />} {chatSettings.starred.includes(activeConversation.id) ? 'Quitar de destacados' : 'Destacar Chat'}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleToggleMute}>{chatSettings.muted.includes(activeConversation.id) ? <Volume2 className="mr-2 h-4 w-4" /> : <VolumeX className="mr-2 h-4 w-4" />} {chatSettings.muted.includes(activeConversation.id) ? 'Activar sonido' : 'Silenciar'}</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={handleClearChat}><Trash2 className="mr-2 h-4 w-4" />Limpiar Chat</DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleToggleBlock} className="text-red-600"><Ban className="mr-2 h-4 w-4" />Bloquear</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          </div></CardHeader><div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
+            {(messages[activeConversation.id] || []).map((msg, index) => {
+              const isOwn = (msg.sender_id || msg.senderId) === user.id;
+              const createdAt = msg.created_at || msg.timestamp;
+              return (
+                <motion.div key={msg.id || index} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex items-end gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${isOwn ? 'chat-bubble-sent text-white' : 'bg-white text-gray-900'}`}>
+                    <MessageContent msg={msg} />
+                  </div>
+                  <div className={`text-[10px] mt-1 ${isOwn ? 'text-right' : 'text-left'} text-gray-500 flex items-center gap-1`}>
+                    {createdAt ? formatTime(createdAt) : ''}
+                    {isOwn && (msg.read ? <CheckCheck className="w-3 h-3 text-blue-500" /> : <Check className="w-3 h-3" />)}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+          <div className="border-t p-3 bg-white">
+            <form onSubmit={handleSendMessage} className="flex space-x-2 items-center">
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+              <Button type="button" variant="ghost" size="icon" onClick={() => fileInputRef.current.click()}><Paperclip className="w-4 h-4" /></Button>
+              {user.userType === 'provider' && (
+                <Dialog open={isOfferDialogOpen} onOpenChange={setIsOfferDialogOpen}>
+                  <DialogTrigger asChild><Button type="button" variant="outline" size="sm"><FileSignature className="w-4 h-4 mr-2" />Crear Oferta</Button></DialogTrigger>
+                  <DialogContent className="sm:max-w-[480px]">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-primary"/>Crear Oferta Profesional</DialogTitle>
+                      <DialogDescription>Envía una oferta formal y detallada a {getOtherParticipant(activeConversation).name}.</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                      <div className="space-y-2"><Label htmlFor="title">Título del Servicio</Label><Input id="title" placeholder="Ej: Diseño de logo y branding" value={offerData.title} onChange={(e) => setOfferData({...offerData, title: e.target.value})} /></div>
+                      <div className="space-y-2"><Label htmlFor="description">Descripción detallada</Label><Textarea id="description" placeholder="Describe el alcance, entregables y plazos." value={offerData.description} onChange={(e) => setOfferData({...offerData, description: e.target.value})} /></div>
+                      <div className="space-y-2"><Label htmlFor="price">Precio Total (ARS)</Label><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input id="price" type="number" placeholder="5000" className="pl-8" value={offerData.price} onChange={(e) => setOfferData({...offerData, price: e.target.value})} /></div></div>
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsOfferDialogOpen(false)}>Cancelar</Button>
+                      <Button type="button" onClick={handleSendOffer}>Enviar Oferta</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+              <Input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Escribe tu mensaje..." className="flex-1" />
+              <Button type="submit" disabled={!message.trim()}><Send className="w-4 h-4" /></Button>
+            </form>
+          </div>
+          </>) : <CardContent className="flex-1 flex items-center justify-center"><div className="text-center"><MessageCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" /><h3 className="text-xl font-medium text-gray-900 mb-2">Selecciona una conversación</h3><p className="text-gray-600">Elige una conversación para empezar a chatear.</p></div></CardContent>}</Card></div>
         </div>
       </div>
       {selectedOffer && (

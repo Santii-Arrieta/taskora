@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { useWallet } from './WalletContext';
 import { useNotification } from './NotificationContext';
 import { useData } from './DataContext';
+import { supabase } from '@/lib/customSupabaseClient';
 
 const ContractContext = createContext(null);
 
@@ -17,13 +18,22 @@ export const ContractProvider = ({ children }) => {
 
   const loadContractsFromStorage = useCallback(async () => {
     if (user) {
-        const storedContracts = await getData('contracts');
-        const userContracts = storedContracts.filter(c => c.providerId === user.id || c.clientId === user.id);
-        setContracts(userContracts);
+        const { data, error } = await supabase
+          .from('contracts')
+          .select('*')
+          .or(`providerId.eq.${user.id},clientId.eq.${user.id}`)
+          .order('createdAt', { ascending: false })
+          .limit(50);
+        if (error) {
+          console.error('Error fetching contracts', error);
+          setContracts([]);
+          return;
+        }
+        setContracts(data || []);
     } else {
         setContracts([]);
     }
-  }, [user, getData]);
+  }, [user]);
 
   useEffect(() => {
     loadContractsFromStorage();
