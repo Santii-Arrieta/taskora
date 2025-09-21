@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +31,10 @@ const ProfilePage = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' });
   const [mpData, setMpData] = useState({ mp_cbu_alias: '', mp_full_name: '' });
+  const [locationLabel, setLocationLabel] = useState('');
+  const [locationRadius, setLocationRadius] = useState(5); // km default smaller visually
+  const radiusInitRef = useRef(false);
+  const radiusDebounceRef = useRef(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -44,12 +48,30 @@ const ProfilePage = () => {
         name: user.name || '',
         email: user.email || '',
         phone: user.phone || '',
-        address: user.address || '',
         website: user.website || '',
         bio: user.bio || '',
         avatarKey: user.avatarKey || '',
         location: user.location || null,
       });
+      if (!radiusInitRef.current) {
+        setLocationRadius(user.searchPreferences?.radius ?? 5);
+        radiusInitRef.current = true;
+      }
+      // Prefill location label via reverse geocoding if coordinates exist
+      const loadReverseGeocode = async () => {
+        try {
+          if (user.location?.lat != null && user.location?.lng != null) {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${user.location.lat}&lon=${user.location.lng}`);
+            const data = await res.json();
+            if (data?.display_name) setLocationLabel(data.display_name);
+          } else {
+            setLocationLabel('');
+          }
+        } catch (_) {
+          // ignore network errors
+        }
+      };
+      loadReverseGeocode();
       setMpData({
         mp_cbu_alias: user.mp_cbu_alias || '',
         mp_full_name: user.mp_full_name || '',
@@ -66,6 +88,27 @@ const ProfilePage = () => {
   const handleLocationChange = (newLocation) => {
     setFormData(prev => ({ ...prev, location: newLocation }));
   };
+
+  // Auto-guardar ubicación cuando cambia, evitando submit manual y recargas
+  useEffect(() => {
+    if (!user) return;
+    if (formData.location && (user.location?.lat !== formData.location.lat || user.location?.lng !== formData.location.lng)) {
+      updateProfile({ location: formData.location });
+    }
+  }, [formData.location, user, updateProfile]);
+
+  // Persist radius preference when it changes (debounced)
+  useEffect(() => {
+    if (!user || !radiusInitRef.current) return;
+    if (user.searchPreferences?.radius === locationRadius) return;
+    if (radiusDebounceRef.current) clearTimeout(radiusDebounceRef.current);
+    radiusDebounceRef.current = setTimeout(() => {
+      updateProfile({ searchPreferences: { radius: locationRadius } });
+    }, 400);
+    return () => {
+      if (radiusDebounceRef.current) clearTimeout(radiusDebounceRef.current);
+    };
+  }, [locationRadius, user, updateProfile]);
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
@@ -149,7 +192,6 @@ const ProfilePage = () => {
                   <div className="space-y-1"><Label htmlFor="name">Nombre</Label><Input id="name" name="name" value={formData.name} onChange={handleInputChange} /></div>
                   <div className="space-y-1"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" value={formData.email} disabled /></div>
                   <div className="space-y-1"><Label htmlFor="phone">Teléfono</Label><Input id="phone" name="phone" value={formData.phone} onChange={handleInputChange} /></div>
-                  <div className="space-y-1"><Label htmlFor="address">Dirección</Label><Input id="address" name="address" value={formData.address} onChange={handleInputChange} /></div>
                   <div className="space-y-1"><Label htmlFor="website">Sitio Web</Label><Input id="website" name="website" value={formData.website} onChange={handleInputChange} /></div>
                 </div>
                 <div className="space-y-1"><Label htmlFor="bio">Biografía</Label><Textarea id="bio" name="bio" value={formData.bio} onChange={handleInputChange} placeholder="Cuéntanos un poco sobre ti..." /></div>
@@ -160,8 +202,45 @@ const ProfilePage = () => {
                     <LocationPicker 
                         value={formData.location} 
                         onChange={handleLocationChange}
+                        radius={locationRadius}
+                        searchValue={locationLabel}
+                        onSearchChange={setLocationLabel}
                      />
                   </Suspense>
+                  <div className="space-y-2 mt-2">
+                    <Label>Radio de búsqueda</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        value={locationRadius}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? '' : Math.max(1, Math.min(200, Number(e.target.value) || 1));
+                          setLocationRadius(val);
+                        }}
+                        onBlur={(e) => {
+                          if (e.target.value === '' || e.target.value < 1) {
+                            setLocationRadius(1);
+                          }
+                        }}
+                        className="w-20 px-2 py-1 border rounded text-sm"
+                      />
+                      <span className="text-sm text-muted-foreground">km</span>
+                      <div className="flex-1">
+                        <input
+                          type="range"
+                          min="1"
+                          max="200"
+                          step="1"
+                          value={locationRadius}
+                          onChange={(e) => setLocationRadius(Number(e.target.value))}
+                          onInput={(e) => setLocationRadius(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>

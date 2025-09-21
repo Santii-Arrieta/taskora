@@ -40,10 +40,14 @@ const ChatPage = () => {
     if (messagesContainerRef.current) {
         messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
+  }, [activeConversation?.messages]);
+
+  // Separate effect for marking as read to prevent excessive calls
+  useEffect(() => {
     if (activeConversation) {
       markAsRead(activeConversation.id);
     }
-  }, [activeConversation, activeConversation?.messages, markAsRead]);
+  }, [activeConversation?.id]); // Only trigger when conversation changes, not on every message
 
   const handleSendMessage = (e) => {
     e.preventDefault();
@@ -116,9 +120,11 @@ const ChatPage = () => {
     return conversation.participants.find(p => p.id !== user.id) || { name: 'Desconocido', id: null };
   };
 
-  const filteredConversations = conversations.filter(conv => {
+  const filteredConversations = (conversations || []).filter(conv => {
     const otherParticipant = getOtherParticipant(conv);
-    return otherParticipant.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const name = otherParticipant?.name?.toLowerCase?.() || '';
+    const term = (searchTerm || '').toLowerCase();
+    return name.includes(term);
   });
 
   const formatTime = (timestamp) => new Date(timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });

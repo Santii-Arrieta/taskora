@@ -49,7 +49,7 @@ const DraggableMarker = ({ value, onChange, isDraggable = true }) => {
   );
 };
 
-const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggable = true, onSearchSubmit }) => {
+const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggable = true, onSearchSubmit, searchValue, onSearchChange }) => {
   const [currentValue, setCurrentValue] = useState(value);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -65,11 +65,11 @@ const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggabl
     if (onChange) onChange(newLocation);
   };
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery) return;
+  const handleSearch = async () => {
+    const query = (searchValue ?? searchQuery) || '';
+    if (!query) return;
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}`);
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
       const data = await response.json();
       if (data && data.length > 0) {
         const { lat, lon } = data[0];
@@ -77,6 +77,7 @@ const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggabl
         setCurrentValue(newLocation);
         if (onChange) onChange(newLocation);
         if (onSearchSubmit) onSearchSubmit(newLocation);
+        if (onSearchChange && data[0]?.display_name) onSearchChange(data[0].display_name);
       } else {
         alert('Ubicación no encontrada.');
       }
@@ -94,15 +95,19 @@ const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggabl
   return (
     <div className="space-y-2">
       {showSearch && (
-        <form onSubmit={handleSearch} className="flex gap-2">
+        <div className="flex gap-2">
           <Input
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={(searchValue ?? searchQuery)}
+            onChange={(e) => {
+              if (onSearchChange) onSearchChange(e.target.value);
+              else setSearchQuery(e.target.value);
+            }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(); } }}
             placeholder="Buscar dirección..."
           />
-          <Button type="submit" size="icon" variant="outline"><Search className="w-4 h-4" /></Button>
-        </form>
+          <Button type="button" size="icon" variant="outline" onClick={handleSearch}><Search className="w-4 h-4" /></Button>
+        </div>
       )}
       <div className="h-64 w-full rounded-md overflow-hidden z-0">
         <MapContainer center={currentValue || [-34.6037, -58.3816]} zoom={13} style={{ height: '100%', width: '100%' }}>
@@ -114,7 +119,7 @@ const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggabl
           {currentValue && radius && (
             <Circle
               center={currentValue}
-              pathOptions={{ color: 'blue', fillColor: 'blue', fillOpacity: 0.2 }}
+              pathOptions={{ color: 'blue', fillColor: 'blue', fillOpacity: 0.1, weight: 1 }}
               radius={radius * 1000} // radius in meters
             />
           )}

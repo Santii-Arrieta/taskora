@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import useLocalStorageState from 'use-local-storage-state';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -22,6 +22,11 @@ export const ChatProvider = ({ children }) => {
   const [chatSettings, setChatSettings] = useLocalStorageState('chatSettings', {
     defaultValue: { muted: [], blocked: [], starred: [] }
   });
+  
+  // Performance optimization refs
+  const messageUpdateTimeoutRef = useRef(null);
+  const readStatusTimeoutRef = useRef(null);
+  const isUpdatingRef = useRef(false);
 
   const getUnreadCount = (convs) => {
     if (!user) return 0;
@@ -49,7 +54,40 @@ export const ChatProvider = ({ children }) => {
       return;
     }
 
-    const validConversations = userConversations.filter(conv => {
+    // Load messages for each conversation
+    const conversationsWithMessages = await Promise.all(
+      userConversations.map(async (conv) => {
+        const { data: messages, error: messagesError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', conv.id)
+          .order('created_at', { ascending: true })
+          .limit(50); // Load last 50 messages for performance
+
+        if (messagesError) {
+          console.error("Error loading messages:", messagesError);
+          return conv;
+        }
+
+        // Transform messages to match expected format
+        const formattedMessages = messages.map(msg => ({
+          id: msg.id,
+          senderId: msg.sender_id,
+          content: msg.content,
+          type: msg.type,
+          timestamp: msg.created_at,
+          read: msg.read
+        }));
+
+        return {
+          ...conv,
+          messages: formattedMessages,
+          lastMessage: formattedMessages.length > 0 ? formattedMessages[formattedMessages.length - 1] : null
+        };
+      })
+    );
+
+    const validConversations = conversationsWithMessages.filter(conv => {
       const otherParticipant = conv.participants.find(p => p.id !== user.id);
       return otherParticipant && !chatSettings.blocked.includes(otherParticipant.id);
     }).sort((a, b) => {
@@ -103,7 +141,7 @@ export const ChatProvider = ({ children }) => {
   };
 
   const sendMessage = async (conversationId, content, type = 'text') => {
-    if (!user) return;
+    if (!user || isUpdatingRef.current) return;
     
     const convIndex = conversations.findIndex(c => c.id === conversationId);
     if (convIndex === -1) return;
@@ -114,8 +152,17 @@ export const ChatProvider = ({ children }) => {
         return;
     }
 
-    const message = { id: Date.now().toString(), senderId: user.id, content, type, timestamp: new Date().toISOString(), read: false };
+    // Generate unique message ID with timestamp and random component
+    const message = { 
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
+      senderId: user.id, 
+      content, 
+      type, 
+      timestamp: new Date().toISOString(), 
+      read: false 
+    };
     
+    // Optimistic update - update UI immediately
     const updatedConv = {
       ...conversations[convIndex],
       messages: [...(conversations[convIndex].messages || []), message],
@@ -130,11 +177,86 @@ export const ChatProvider = ({ children }) => {
       setActiveConversation(updatedConv);
     }
 
-    const { error } = await supabase.from('conversations').update({ messages: updatedConv.messages, lastMessage: message }).eq('id', conversationId);
-    if (error) {
-      console.error("Error sending message", error);
-      toast({ title: 'Error', description: 'No se pudo enviar el mensaje.', variant: 'destructive' });
-      loadConversations();
+    // Use new optimized message insertion
+    try {
+      const { data: newMessage, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          content: content,
+          type: type,
+          read: false
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error sending message", error);
+        toast({ 
+          title: 'Error', 
+          description: 'No se pudo enviar el mensaje.', 
+          variant: 'destructive' 
+        });
+        
+        // Revert optimistic update on error
+        setConversations(prevConvs => 
+          prevConvs.map(c => 
+            c.id === conversationId 
+              ? { ...c, messages: c.messages.slice(0, -1) }
+              : c
+          )
+        );
+        
+        if (activeConversation?.id === conversationId) {
+          setActiveConversation(prev => 
+            prev ? { 
+              ...prev, 
+              messages: prev.messages.slice(0, -1),
+              lastMessage: prev.messages[prev.messages.length - 2] || null
+            } : null
+          );
+        }
+      } else {
+        // Update with real message data
+        const realMessage = {
+          id: newMessage.id,
+          senderId: newMessage.sender_id,
+          content: newMessage.content,
+          type: newMessage.type,
+          timestamp: newMessage.created_at,
+          read: newMessage.read
+        };
+
+        setConversations(prevConvs => 
+          prevConvs.map(c => 
+            c.id === conversationId 
+              ? { 
+                  ...c, 
+                  messages: [...c.messages.slice(0, -1), realMessage],
+                  lastMessage: realMessage
+                }
+              : c
+          )
+        );
+        
+        if (activeConversation?.id === conversationId) {
+          setActiveConversation(prev => 
+            prev ? { 
+              ...prev, 
+              messages: [...prev.messages.slice(0, -1), realMessage],
+              lastMessage: realMessage
+            } : null
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Unexpected error sending message:", err);
+      toast({ 
+        title: 'Error', 
+        description: 'Error inesperado al enviar el mensaje.', 
+        variant: 'destructive' 
+      });
     }
   };
 
@@ -143,63 +265,235 @@ export const ChatProvider = ({ children }) => {
     const conv = conversations.find(c => c.id === conversationId);
     if(!conv) return;
 
-    let changed = false;
-    const updatedMessages = (conv.messages || []).map(msg => {
-      if (msg.senderId !== user.id && !msg.read) {
-        changed = true;
-        return {...msg, read: true };
-      }
-      return msg;
-    });
-
-    if (changed) {
-        const { error } = await supabase.from('conversations').update({ messages: updatedMessages }).eq('id', conversationId);
-        if(error) console.error("Error marking as read", error);
+    // Clear any existing timeout
+    if (readStatusTimeoutRef.current) {
+      clearTimeout(readStatusTimeoutRef.current);
     }
+
+    // Debounce read status updates to prevent timeout errors
+    readStatusTimeoutRef.current = setTimeout(async () => {
+      try {
+        // Use the optimized database function
+        const { data: updatedCount, error } = await supabase
+          .rpc('mark_messages_as_read', {
+            p_conversation_id: conversationId,
+            p_user_id: user.id
+          });
+
+        if (error) {
+          console.error("Error marking as read", error);
+          return;
+        }
+
+        if (updatedCount > 0) {
+          // Update local state immediately for better UX
+          setConversations(prevConvs => 
+            prevConvs.map(c => 
+              c.id === conversationId 
+                ? { 
+                    ...c, 
+                    messages: c.messages.map(msg => 
+                      msg.senderId !== user.id ? { ...msg, read: true } : msg
+                    )
+                  }
+                : c
+            )
+          );
+          
+          if (activeConversation?.id === conversationId) {
+            setActiveConversation(prev => 
+              prev ? { 
+                ...prev, 
+                messages: prev.messages.map(msg => 
+                  msg.senderId !== user.id ? { ...msg, read: true } : msg
+                )
+              } : null
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Unexpected error in markAsRead:", err);
+      }
+    }, 500); // 500ms debounce to prevent rapid successive calls
   };
 
   const clearChat = async (conversationId) => {
     if(!user) return;
-    const { error } = await supabase.from('conversations').update({ messages: [] }).eq('id', conversationId);
-    if (error) {
+    
+    // Delete all messages from the messages table
+    const { error: messagesError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('conversation_id', conversationId);
+    
+    if (messagesError) {
       toast({title: "Error", description: "No se pudo limpiar el chat.", variant: "destructive"});
     } else {
       toast({title: "Chat limpiado", description: "La conversación ha sido vaciada."});
       setActiveConversation(prev => prev ? {...prev, messages: []} : null);
+      
+      // Update conversations state
+      setConversations(prevConvs => 
+        prevConvs.map(c => 
+          c.id === conversationId 
+            ? { ...c, messages: [], lastMessage: null }
+            : c
+        )
+      );
     }
   }
+
+  const loadMoreMessages = async (conversationId, offset = 0, limit = 20) => {
+    if (!user) return [];
+    
+    try {
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error("Error loading more messages:", error);
+        return [];
+      }
+
+      return messages.map(msg => ({
+        id: msg.id,
+        senderId: msg.sender_id,
+        content: msg.content,
+        type: msg.type,
+        timestamp: msg.created_at,
+        read: msg.read
+      }));
+    } catch (err) {
+      console.error("Unexpected error loading more messages:", err);
+      return [];
+    }
+  };
   
   useEffect(() => {
     if (!user) return;
 
     const channel = supabase
-      .channel('public:conversations')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, (payload) => {
-          const myParticipant = payload.new?.participants?.find(p => p.id === user.id);
-          if (myParticipant) {
-              setConversations(prevConvs => {
-                const index = prevConvs.findIndex(c => c.id === payload.new.id);
-                if (index > -1) {
-                  const newConvs = [...prevConvs];
-                  newConvs[index] = payload.new;
-                  return newConvs;
-                }
-                return prevConvs;
-              });
-              if(activeConversation?.id === payload.new.id) {
-                setActiveConversation(payload.new);
-              }
+      .channel('public:messages')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages' 
+      }, async (payload) => {
+        try {
+          const newMessage = payload.new;
+          const conversationId = newMessage.conversation_id;
+          
+          // Check if this message is for a conversation the user is part of
+          const userConv = conversations.find(c => c.id === conversationId);
+          if (userConv) {
+            const formattedMessage = {
+              id: newMessage.id,
+              senderId: newMessage.sender_id,
+              content: newMessage.content,
+              type: newMessage.type,
+              timestamp: newMessage.created_at,
+              read: newMessage.read
+            };
+
+            // Update conversations state
+            setConversations(prevConvs => 
+              prevConvs.map(c => 
+                c.id === conversationId 
+                  ? { 
+                      ...c, 
+                      messages: [...c.messages, formattedMessage],
+                      lastMessage: formattedMessage
+                    }
+                  : c
+              )
+            );
+            
+            // Update active conversation if it's the current one
+            if(activeConversation?.id === conversationId) {
+              setActiveConversation(prev => 
+                prev ? { 
+                  ...prev, 
+                  messages: [...prev.messages, formattedMessage],
+                  lastMessage: formattedMessage
+                } : null
+              );
+            }
           }
+        } catch (err) {
+          console.error("Error processing new message:", err);
+        }
+      })
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'messages' 
+      }, (payload) => {
+        try {
+          const updatedMessage = payload.new;
+          const conversationId = updatedMessage.conversation_id;
+          
+          const userConv = conversations.find(c => c.id === conversationId);
+          if (userConv) {
+            const formattedMessage = {
+              id: updatedMessage.id,
+              senderId: updatedMessage.sender_id,
+              content: updatedMessage.content,
+              type: updatedMessage.type,
+              timestamp: updatedMessage.created_at,
+              read: updatedMessage.read
+            };
+
+            // Update conversations state
+            setConversations(prevConvs => 
+              prevConvs.map(c => 
+                c.id === conversationId 
+                  ? { 
+                      ...c, 
+                      messages: c.messages.map(msg => 
+                        msg.id === formattedMessage.id ? formattedMessage : msg
+                      )
+                    }
+                  : c
+              )
+            );
+            
+            // Update active conversation if it's the current one
+            if(activeConversation?.id === conversationId) {
+              setActiveConversation(prev => 
+                prev ? { 
+                  ...prev, 
+                  messages: prev.messages.map(msg => 
+                    msg.id === formattedMessage.id ? formattedMessage : msg
+                  )
+                } : null
+              );
+            }
+          }
+        } catch (err) {
+          console.error("Error processing message update:", err);
+        }
       })
       .subscribe((status, err) => {
-        if(status === 'SUBSCRIBED') console.log("Realtime chat connected!");
-        if(err) console.error("Realtime chat error", err);
+        if(status === 'SUBSCRIBED') {
+          console.log("Realtime messages connected!");
+        }
+        if(err) {
+          console.error("Realtime messages error", err);
+          // Attempt to reconnect after a delay
+          setTimeout(() => {
+            console.log("Attempting to reconnect to realtime...");
+          }, 5000);
+        }
       });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, activeConversation?.id]);
+  }, [user, activeConversation?.id, conversations]);
 
 
   const toggleMute = (conversationId) => setChatSettings(prev => ({...prev, muted: prev.muted.includes(conversationId) ? prev.muted.filter(id => id !== conversationId) : [...prev.muted, conversationId] }));
@@ -215,10 +509,22 @@ export const ChatProvider = ({ children }) => {
     }
   }, [conversations, activeConversation?.id]);
 
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (messageUpdateTimeoutRef.current) {
+        clearTimeout(messageUpdateTimeoutRef.current);
+      }
+      if (readStatusTimeoutRef.current) {
+        clearTimeout(readStatusTimeoutRef.current);
+      }
+    };
+  }, []);
+
 
   const value = {
     conversations, activeConversation, setActiveConversation,
-    createConversation, sendMessage, markAsRead, clearChat,
+    createConversation, sendMessage, markAsRead, clearChat, loadMoreMessages,
     unreadCount: getUnreadCount(conversations),
     chatSettings, toggleMute, toggleBlock, toggleStar,
   };
