@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/components/ui/use-toast';
 import { Mail, Phone, MapPin, Link as LinkIcon, Briefcase, CheckCircle, Building, Star, Target, Eye, HeartHandshake as Handshake, Users, History } from 'lucide-react';
+import { getUserTypeLabel } from '@/utils/userType';
 
 const StarRating = ({ rating }) => {
   const totalStars = 5;
@@ -72,9 +73,7 @@ const PublicProfilePage = () => {
     admin: 'admin-gradient'
   })[userType] || 'bg-gray-500';
 
-  const getUserTypeLabel = (userType) => ({
-    provider: 'Proveedor', client: 'Cliente', ngo: 'ONG', admin: 'Admin'
-  })[userType] || 'Usuario';
+  // getUserTypeLabel is now imported from '@/utils/userType'
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Cargando perfil...</div>;
