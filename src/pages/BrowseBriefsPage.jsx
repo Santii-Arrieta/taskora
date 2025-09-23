@@ -181,20 +181,54 @@ const BrowseBriefsPage = () => {
     }
   };
 
-  const handleContact = (brief) => {
-    if (user.id === brief.userId) return toast({ title: 'Acción no permitida', description: 'No puedes contactarte a ti mismo.', variant: 'destructive' });
-    createConversation({ id: brief.userId, name: brief.authorName, avatarUrl: brief.authorAvatarUrl, userType: brief.authorType });
-    navigate('/chat');
-  };
 
-  const handleUseMyPosition = () => {
-    if (user?.location) {
-        setFilters(prev => ({ ...prev, searchLocation: user.location, searchLocationSource: 'saved' }));
-        toast({ title: 'Ubicación actualizada', description: 'Se está usando tu ubicación guardada.'});
-    } else {
-        toast({ title: 'Sin ubicación', description: 'No tienes una ubicación guardada en tu perfil.', variant: 'destructive'});
+    const handleUseMyPosition = () => {
+      if (user?.location) {
+        setFilters(prev => ({ ...prev, searchLocation: user.location }));
+        toast({ title: 'Ubicación actualizada', description: 'Se está usando tu ubicación guardada.' });
+      } else {
+        toast({ title: 'Sin ubicación', description: 'No tienes una ubicación guardada en tu perfil.', variant: 'destructive' });
+      }
+    };
+
+  const handleContact = async (brief) => {
+    if (!user) {
+      toast({
+        title: 'Acción requerida',
+        description: 'Debes iniciar sesión para contactar al proveedor.',
+        variant: 'destructive',
+      });
+      return;
+
     }
-  }
+    if (user.id === brief.userId) {
+      toast({
+        title: 'Acción no permitida',
+        description: 'No puedes contactarte a ti mismo.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const conv = await createConversation({ id: brief.userId, name: brief.authorName, avatarUrl: brief.authorAvatarUrl, userType: brief.authorType });
+      if (conv) {
+        navigate('/chat');
+      } else {
+        toast({
+          title: 'Error',
+          description: 'No se pudo iniciar la conversación.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Error al iniciar la conversación.',
+        variant: 'destructive',
+      });
+      console.error('Error creating conversation:', error);
+    }
+  };
 
   const getPageTitle = () => (filters.type === 'opportunity' ? 'Explorar Oportunidades' : 'Explorar Servicios');
   const getPageDescription = () => (filters.type === 'opportunity' ? 'Encuentra tu próxima oportunidad para colaborar.' : 'Encuentra el talento perfecto para tu proyecto.');
