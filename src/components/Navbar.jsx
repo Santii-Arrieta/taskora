@@ -136,7 +136,7 @@ const Navbar = () => {
           <div className="flex justify-between items-center h-16">
             <Link to={user ? (user.userType === 'admin' ? '/admin' : '/') : '/'} className="flex items-center space-x-3">
               <img src="https://horizons-cdn.hostinger.com/1f74fd1e-187f-4699-b213-a769a144b63a/b86e64ebac812444b0ac97fbfe35b651.png" alt="Taskora Logo" className="h-8 object-contain logo-light-mode" />
-              <img src="https://horizons-cdn.hostinger.com/1f74fd1e-187f-4699-b213-a769a144b63a/b86e64ebac812444b0ac97fbfe35b651.png" alt="Taskora Logo Dark" className="h-8 object-contain logo-dark-mode" />
+              <img src="/src/Logo-dark.png" alt="Taskora Logo Dark" className="h-8 object-contain logo-dark-mode" />
             </Link>
             
             <div className="hidden md:flex items-center space-x-6 text-sm font-medium text-foreground/80">

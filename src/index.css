@@ -3,7 +3,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root { 
   --background: 220 20% 96%;
   --foreground: 224 71.4% 4.1%;
   --card: 0 0% 100%;
@@ -100,5 +100,4 @@ body {
 }
 .dark .logo-dark-mode {
   display: block;
-  filter: invert(1) brightness(2);
 }
