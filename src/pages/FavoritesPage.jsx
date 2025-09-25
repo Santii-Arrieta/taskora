@@ -42,7 +42,7 @@ const FavoritesPage = () => {
         } else {
           const briefsWithAvatars = data.map(brief => ({
             ...brief,
-            authorAvatarUrl: brief.author?.avatarKey ? supabase.storage.from('avatars').getPublicUrl(brief.author.avatarKey).data.publicUrl : null,
+            authorAvatarUrl: brief.author?.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(brief.author.avatarKey).data.publicUrl : null,
           }));
           setFavoriteBriefs(briefsWithAvatars);
         }

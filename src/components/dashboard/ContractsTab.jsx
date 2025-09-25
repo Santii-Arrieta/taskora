@@ -91,7 +91,7 @@ const ContractCard = ({ contract, user, onMarkAsCompleted, onConfirmCompletion, 
       </CardHeader>
       <CardContent>
         <div className="flex justify-between items-center text-sm">
-          <p>Precio: <span className="font-bold text-green-600">${contract.price}</span></p>
+          <p>Precio: <span className="font-bold text-green-600">${contract.price}<span className="ml-1 font-semibold">{(contract.priceType || 'total') === 'por_hora' ? '/hora' : '/unico'}</span></span></p>
           <Badge variant={contract.status === 'completed' ? 'success' : 'default'}>
             {contract.status === 'active' && 'Activo'}
             {contract.status === 'completed' && 'Completado'}

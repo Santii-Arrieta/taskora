@@ -77,7 +77,7 @@ const ChatPage = () => {
       price: parseFloat(offerData.price),
       providerId: user.id,
       providerName: user.name,
-      providerAvatar: user.avatarKey ? supabase.storage.from('avatars').getPublicUrl(user.avatarKey).data.publicUrl : null,
+      providerAvatar: user.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(user.avatarKey).data.publicUrl : null,
       clientId: otherParticipant.id,
       clientName: otherParticipant.name,
       clientAvatar: otherParticipant.avatarUrl,

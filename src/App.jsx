@@ -30,14 +30,29 @@ import CommunityPage from '@/pages/CommunityPage';
 import BlogArticlePage from '@/pages/BlogArticlePage';
 import { Toaster } from '@/components/ui/toaster';
 import { initMercadoPago } from '@mercadopago/sdk-react';
+import { supabase } from '@/lib/customSupabaseClient';
 import 'leaflet/dist/leaflet.css';
 import { AnimatePresence } from 'framer-motion';
 
 const InitializeMercadoPago = () => {
   useEffect(() => {
-    const mpSettings = JSON.parse(localStorage.getItem('mpSettings') || '{}');
-    const publicKey = mpSettings.publicKey || 'TEST-c8551735-6592-44a8-8949-9a3395551a39'; // Fallback to test key
-    initMercadoPago(publicKey, { locale: 'es-AR' });
+    const loadAndInit = async () => {
+      // 1) Try DB settings (admin-managed)
+      let publicKey = null;
+      const { data } = await supabase.from('settings').select('mpPublicKey').eq('id', 1).maybeSingle();
+      if (data?.mpPublicKey) {
+        publicKey = data.mpPublicKey;
+        localStorage.setItem('mpSettings', JSON.stringify({ publicKey }));
+      } else {
+        // 2) Fallback to cached localStorage
+        const cached = JSON.parse(localStorage.getItem('mpSettings') || '{}');
+        publicKey = cached.publicKey || null;
+      }
+
+      // 3) Final fallback to test key to avoid breaking UI
+      initMercadoPago(publicKey || 'TEST-c8551735-6592-44a8-8949-9a3395551a39', { locale: 'es-AR' });
+    };
+    loadAndInit();
   }, []);
   return null;
 };

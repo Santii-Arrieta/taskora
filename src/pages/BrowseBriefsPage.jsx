@@ -70,12 +70,15 @@ const BrowseBriefsPage = () => {
   useEffect(() => {
     setFilters(prev => ({
         ...prev,
-        // Only hydrate from saved profile if the current source is not 'filter'
-        ...(prev.searchLocationSource !== 'filter' ? {
+        // Only hydrate from saved profile if the current source is not 'manual' or 'filter'
+        ...(prev.searchLocationSource !== 'manual' && prev.searchLocationSource !== 'filter' ? {
           searchLocation: user?.location || null,
           searchLocationSource: user?.location ? 'saved' : 'none'
         } : {}),
-        searchRadius: user?.searchPreferences?.radius || 50
+        // Only update radius if not manually set
+        ...(prev.searchLocationSource !== 'manual' ? {
+          searchRadius: user?.searchRadius || user?.searchPreferences?.radius || 50
+        } : {})
     }));
   }, [user]);
 
@@ -113,7 +116,7 @@ const BrowseBriefsPage = () => {
     
     const briefsWithDetails = briefsData.map(brief => {
       const avgRating = brief.reviews.length > 0 ? brief.reviews.reduce((acc, r) => acc + r.rating, 0) / brief.reviews.length : 0;
-      const authorAvatarUrl = brief.author?.avatarKey ? supabase.storage.from('avatars').getPublicUrl(brief.author.avatarKey).data.publicUrl : null;
+      const authorAvatarUrl = brief.author?.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(brief.author.avatarKey).data.publicUrl : null;
       
       return { 
         ...brief, 
@@ -184,8 +187,13 @@ const BrowseBriefsPage = () => {
 
     const handleUseMyPosition = () => {
       if (user?.location) {
-        setFilters(prev => ({ ...prev, searchLocation: user.location }));
-        toast({ title: 'Ubicación actualizada', description: 'Se está usando tu ubicación guardada.' });
+        setFilters(prev => ({ 
+          ...prev, 
+          searchLocation: user.location,
+          searchRadius: user.searchRadius || 10,
+          searchLocationSource: 'saved'
+        }));
+        toast({ title: 'Ubicación actualizada', description: 'Se está usando tu ubicación y radio guardados.' });
       } else {
         toast({ title: 'Sin ubicación', description: 'No tienes una ubicación guardada en tu perfil.', variant: 'destructive' });
       }

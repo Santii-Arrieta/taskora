@@ -115,8 +115,8 @@ export const ChatProvider = ({ children }) => {
     const newConversation = {
       id: conversationId,
       participants: [
-        {id: user.id, name: user.name, avatarUrl: user.avatarKey ? supabase.storage.from('avatars').getPublicUrl(user.avatarKey).data.publicUrl : null, userType: user.userType}, 
-        {id: participant.id, name: participant.name, avatarUrl: participant.avatarKey ? supabase.storage.from('avatars').getPublicUrl(participant.avatarKey).data.publicUrl : null, userType: participant.userType}
+        {id: user.id, name: user.name, avatarUrl: user.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(user.avatarKey).data.publicUrl : null, userType: user.userType}, 
+        {id: participant.id, name: participant.name, avatarUrl: participant.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(participant.avatarKey).data.publicUrl : null, userType: participant.userType}
       ],
       createdAt: new Date().toISOString(), lastMessage: null,
     };

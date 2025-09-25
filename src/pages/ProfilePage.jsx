@@ -18,11 +18,14 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getUserTypeLabel } from '@/utils/userType';
 import { Camera, User, Settings, Bell, Shield, CreditCard, Save, Loader2, Link as LinkIcon, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
+import { useImageOptimization } from '@/hooks/useImageOptimization';
+import { ImageOptimizationStats } from '@/components/ui/image-optimization-stats';
 const LocationPicker = lazy(() => import('@/components/LocationPicker'));
 
 const ProfilePage = () => {
   const { user, updateProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { optimizeSingleImage, isOptimizing, optimizationStats } = useImageOptimization();
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
@@ -50,6 +53,7 @@ const ProfilePage = () => {
         bio: user.bio || '',
         avatarKey: user.avatarKey || '',
         location: user.location || null,
+        searchRadius: user.searchRadius || 10,
       });
       setMpData({
         mp_cbu_alias: user.mp_cbu_alias || '',
@@ -64,8 +68,12 @@ const ProfilePage = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleLocationChange = (newLocation) => {
-    setFormData(prev => ({ ...prev, location: newLocation }));
+  const handleLocationChange = (newLocation, newRadius) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      location: newLocation,
+      searchRadius: newRadius || prev.searchRadius
+    }));
   };
 
   const handleAvatarUpload = async (e) => {
@@ -73,21 +81,38 @@ const ProfilePage = () => {
     if (!file) return;
 
     setIsSaving(true);
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`;
+    
+    try {
+      // Optimizar la imagen antes de subir
+      const optimizedImage = await optimizeSingleImage(file);
+      
+      const fileName = `${user.id}-${Date.now()}.webp`;
+      const filePath = `avatars/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('portfolio').upload(filePath, optimizedImage);
 
-    if (uploadError) {
-      toast({ title: 'Error de subida', description: `No se pudo subir la imagen. ${uploadError.message}`, variant: 'destructive' });
+      if (uploadError) {
+        toast({ title: 'Error de subida', description: `No se pudo subir la imagen. ${uploadError.message}`, variant: 'destructive' });
+        setIsSaving(false);
+        return;
+      }
+
+      await updateProfile({ avatarKey: filePath });
+      toast({ title: 'Avatar actualizado', description: 'Tu foto de perfil ha sido cambiada.' });
+      
+      // Mostrar estadísticas de optimización
+      if (optimizationStats && optimizationStats.reduction > 0) {
+        toast({ 
+          title: 'Imagen optimizada', 
+          description: `Tamaño reducido en ${optimizationStats.reduction}%` 
+        });
+      }
+    } catch (error) {
+      console.error('Error optimizando avatar:', error);
+      toast({ title: 'Error', description: 'Error al procesar la imagen.', variant: 'destructive' });
+    } finally {
       setIsSaving(false);
-      return;
     }
-
-    await updateProfile({ avatarKey: filePath });
-    toast({ title: 'Avatar actualizado', description: 'Tu foto de perfil ha sido cambiada.' });
-    setIsSaving(false);
   };
 
   const handleSubmit = async (e) => {
@@ -136,7 +161,7 @@ const ProfilePage = () => {
     return <div className="flex items-center justify-center h-screen"><Loader2 className="w-12 h-12 animate-spin text-primary" /></div>;
   }
 
-  const avatarUrl = user.avatarKey ? supabase.storage.from('avatars').getPublicUrl(user.avatarKey).data.publicUrl : null;
+  const avatarUrl = user.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(user.avatarKey).data.publicUrl : null;
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -161,6 +186,8 @@ const ProfilePage = () => {
                     <LocationPicker 
                         value={formData.location} 
                         onChange={handleLocationChange}
+                        radius={formData.searchRadius}
+                        showRadius={true}
                      />
                   </Suspense>
                 </div>
@@ -290,8 +317,29 @@ const ProfilePage = () => {
                   <Label htmlFor="avatar-upload" className="absolute bottom-0 right-0 bg-secondary text-secondary-foreground rounded-full p-2 cursor-pointer hover:bg-accent">
                     <Camera className="w-4 h-4" />
                   </Label>
-                  <Input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                  <Input 
+                    id="avatar-upload" 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={handleAvatarUpload}
+                    disabled={isOptimizing}
+                  />
+                  
+                  {/* Mostrar estado de carga */}
+                  {isOptimizing && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    </div>
+                  )}
                 </div>
+                
+                {/* Mostrar estadísticas de optimización */}
+                {optimizationStats && (
+                  <div className="w-full">
+                    <ImageOptimizationStats stats={optimizationStats} showDetails={false} />
+                  </div>
+                )}
                 <h2 className="text-xl font-bold text-center">{user.name}</h2>
                 <Badge variant="outline">{getUserTypeLabel(user.userType)}</Badge>
               </div>

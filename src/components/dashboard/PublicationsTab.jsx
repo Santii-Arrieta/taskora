@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Eye, Users, Briefcase, Edit, Trash2, ImagePlus, Globe, MapPin } from 'lucide-react';
+import { Plus, Eye, Users, Briefcase, Edit, Trash2, ImagePlus, Globe, MapPin, DollarSign } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   AlertDialog,
@@ -26,13 +26,16 @@ import { useData } from '@/contexts/DataContext';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/lib/customSupabaseClient';
+import { useImageOptimization } from '@/hooks/useImageOptimization';
+import { ImageOptimizationStats } from '@/components/ui/image-optimization-stats';
 
 const LocationPicker = lazy(() => import('@/components/LocationPicker'));
 
 const MAX_BRIEFS = 10;
 const initialBriefState = {
   title: '', description: '', category: '', price: '0', deliveryTime: '', 
-  images: [], serviceType: 'online', location: null, radius: 20
+  images: [], serviceType: 'online', location: null, radius: 20,
+  priceType: 'total'
 };
 
 const ApplicantsView = ({ applicants, briefTitle }) => (
@@ -68,6 +71,7 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
   const { user } = useAuth();
   const { addData, updateData, deleteData } = useData();
   const { toast } = useToast();
+  const { optimizeMultipleImages, isOptimizing, optimizationStats } = useImageOptimization();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingBrief, setEditingBrief] = useState(null);
   const [newBrief, setNewBrief] = useState({
@@ -87,24 +91,43 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
       return;
     }
     
-    const uploadedImages = [];
-    for (const file of files) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+    try {
+      // Optimizar imágenes antes de subir
+      const optimizedImages = await optimizeMultipleImages(files);
+      
+      const uploadedImages = [];
+      for (let i = 0; i < optimizedImages.length; i++) {
+        const optimizedImage = optimizedImages[i];
+        const originalFile = files[i];
+        
+        // Usar WebP como extensión
+        const fileName = `${user.id}-${Date.now()}-${i}.webp`;
         const filePath = `briefs/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage.from('portfolio').upload(filePath, file);
+        const { error: uploadError } = await supabase.storage.from('portfolio').upload(filePath, optimizedImage);
 
         if (uploadError) {
-          toast({ title: 'Error de subida', description: `No se pudo subir la imagen ${file.name}.`, variant: 'destructive' });
+          toast({ title: 'Error de subida', description: `No se pudo subir la imagen ${originalFile.name}.`, variant: 'destructive' });
           continue;
         }
 
         const { data } = supabase.storage.from('portfolio').getPublicUrl(filePath);
         uploadedImages.push(data.publicUrl);
+      }
+      
+      setNewBrief(prev => ({...prev, images: [...prev.images, ...uploadedImages]}));
+      
+      // Mostrar estadísticas de optimización
+      if (optimizationStats && optimizationStats.reduction > 0) {
+        toast({ 
+          title: 'Imágenes optimizadas', 
+          description: `Tamaño reducido en ${optimizationStats.reduction}%` 
+        });
+      }
+    } catch (error) {
+      console.error('Error optimizando imágenes:', error);
+      toast({ title: 'Error', description: 'Error al procesar las imágenes.', variant: 'destructive' });
     }
-    
-    setNewBrief(prev => ({...prev, images: [...prev.images, ...uploadedImages]}));
   };
 
   const handleFormSubmit = async (e) => {
@@ -149,6 +172,7 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
       serviceType: brief.serviceType || 'online',
       location: brief.location || null,
       radius: brief.radius || 20,
+      priceType: brief.priceType || 'total',
     });
     setShowCreateForm(true);
     window.scrollTo(0, 0);
@@ -205,7 +229,29 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
                 <Select value={newBrief.category} onValueChange={(v) => setNewBrief({...newBrief, category: v})}><SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger><SelectContent><SelectItem value="design">Diseño</SelectItem><SelectItem value="development">Desarrollo</SelectItem><SelectItem value="marketing">Marketing</SelectItem><SelectItem value="writing">Redacción</SelectItem></SelectContent></Select>
                 <Input placeholder="Duración/Entrega (días)" type="number" value={newBrief.deliveryTime} onChange={(e) => setNewBrief({...newBrief, deliveryTime: e.target.value})} required />
               </div>
-              <Input type="number" placeholder={user.userType === 'ngo' ? 'Compensación (Voluntario = 0)' : 'Precio ($)'} value={newBrief.price} onChange={(e) => setNewBrief({...newBrief, price: e.target.value})} required />
+              <div className="relative">
+                <DollarSign className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Input
+                  type="number"
+                  placeholder={user.userType === 'ngo' ? 'Compensación (Voluntario = 0)' : 'Precio ($)'}
+                  value={newBrief.price}
+                  onChange={(e) => setNewBrief({...newBrief, price: e.target.value})}
+                  required
+                  className="pl-8"
+                  title="Importe"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tipo de precio</Label>
+                <Select value={newBrief.priceType} onValueChange={(v) => setNewBrief({...newBrief, priceType: v})}>
+                  <SelectTrigger><SelectValue placeholder="Selecciona el tipo de precio" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="total">Pago único / Total</SelectItem>
+                    <SelectItem value="por_hora">Por hora</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               
               <div className="space-y-2">
                 <Label>Tipo de Servicio</Label>
@@ -234,10 +280,41 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
               <div>
                 <Label className="text-sm font-medium text-gray-700 mb-2 block">Imágenes (hasta 5)</Label>
                 <div className="flex items-center gap-2">
-                    <Label htmlFor="image-upload" className="cursor-pointer"><div className="p-2 border rounded-md hover:bg-gray-50"><ImagePlus className="w-6 h-6" /></div></Label>
-                    <Input id="image-upload" type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} disabled={newBrief.images.length >= 5}/>
-                    <div className="flex gap-2 flex-wrap">{newBrief.images.map((img, i) => <img key={i} src={img} className="w-16 h-16 rounded-md object-cover" alt="preview"/>)}</div>
+                    <Label htmlFor="image-upload" className="cursor-pointer">
+                      <div className="p-2 border rounded-md hover:bg-gray-50">
+                        <ImagePlus className="w-6 h-6" />
+                      </div>
+                    </Label>
+                    <Input 
+                      id="image-upload" 
+                      type="file" 
+                      multiple 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleImageUpload} 
+                      disabled={newBrief.images.length >= 5 || isOptimizing}
+                    />
+                    <div className="flex gap-2 flex-wrap">
+                      {newBrief.images.map((img, i) => (
+                        <img key={i} src={img} className="w-16 h-16 rounded-md object-cover" alt="preview"/>
+                      ))}
+                    </div>
                 </div>
+                
+                {/* Mostrar estadísticas de optimización */}
+                {optimizationStats && (
+                  <div className="mt-3">
+                    <ImageOptimizationStats stats={optimizationStats} showDetails={false} />
+                  </div>
+                )}
+                
+                {/* Mostrar estado de carga */}
+                {isOptimizing && (
+                  <div className="mt-2 text-sm text-blue-600 flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    Optimizando imágenes...
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2"><Button type="submit">{editingBrief ? 'Guardar Cambios' : 'Publicar'}</Button><Button type="button" variant="outline" onClick={resetForm}>Cancelar</Button></div>
@@ -257,7 +334,7 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
                       <Badge className={`ml-4 ${brief.type === 'opportunity' ? 'ngo-gradient' : 'provider-gradient'} text-white`}>{brief.type === 'opportunity' ? 'Oportunidad' : 'Servicio'}</Badge>
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span className="flex items-center"><strong>Precio:</strong>&nbsp;${brief.price}</span>
+                      <span className="flex items-center"><strong>Precio:</strong>&nbsp;${brief.price}<span className="ml-1 text-green-600 font-semibold">{(brief.priceType || 'total') === 'por_hora' ? '/hora' : '/unico'}</span></span>
                       <span className="flex items-center"><Eye className="w-4 h-4 mr-1" />{brief.views || 0}</span>
                       <span className="flex items-center"><Users className="w-4 h-4 mr-1" />{brief.applications?.length || 0}</span>
                       <span className="flex items-center">

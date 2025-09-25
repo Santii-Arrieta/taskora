@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { supabase } from '@/lib/customSupabaseClient';
 
 const Navbar = () => {
   const { user, logout, switchProfile } = useAuth();
@@ -227,7 +228,7 @@ const Navbar = () => {
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center space-x-3 cursor-pointer p-1 rounded-full hover:bg-accent">
                       <Avatar>
-                        <AvatarImage src={user.avatar} />
+                        <AvatarImage src={user?.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(user.avatarKey).data.publicUrl : undefined} />
                         <AvatarFallback className={`${getUserTypeColor(user.userType)} text-white`}>
                           {user.name ? user.name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
                         </AvatarFallback>

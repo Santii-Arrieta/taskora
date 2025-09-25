@@ -6,11 +6,17 @@ export const useTheme = () => useContext(ThemeContext);
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
+    // Force light mode by default, ignore any saved theme
     const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
-      return savedTheme;
+    
+    // If there's a saved theme and it's not light, clear it
+    if (savedTheme && savedTheme !== 'light') {
+      localStorage.removeItem('theme');
+      localStorage.setItem('theme', 'light');
     }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    
+    // Always default to light mode
+    return 'light';
   });
 
   useEffect(() => {
@@ -22,6 +28,13 @@ export const ThemeProvider = ({ children }) => {
     }
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Force light mode on initial load
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('dark');
+    localStorage.setItem('theme', 'light');
+  }, []);
 
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === 'light' ? 'dark' : 'light'));

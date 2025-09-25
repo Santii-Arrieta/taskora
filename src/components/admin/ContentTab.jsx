@@ -36,7 +36,7 @@ const ContentTab = ({ briefs }) => {
                     <Eye className="w-3 h-3 mr-1" />
                     {brief.views} vistas
                   </span>
-                  <span>${brief.price}</span>
+                  <span className="text-green-600 font-semibold">${brief.price}<span className="ml-1">{(brief.priceType || 'total') === 'por_hora' ? '/hora' : '/unico'}</span></span>
                 </div>
               </div>
               <div className="flex items-center space-x-2">

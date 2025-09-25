@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/components/ui/use-toast';
 import { Mail, Phone, MapPin, Link as LinkIcon, Briefcase, CheckCircle, Building, Star, Target, Eye, HeartHandshake as Handshake, Users, History } from 'lucide-react';
-import { getUserTypeLabel } from '@/utils/userType';
+import { supabase } from '@/lib/customSupabaseClient';
 
 const StarRating = ({ rating }) => {
   const totalStars = 5;
@@ -33,47 +33,120 @@ const PublicProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [portfolioSrcs, setPortfolioSrcs] = useState([]);
   const [avatarSrc, setAvatarSrc] = useState('');
+  const [hasServices, setHasServices] = useState(false);
 
   useEffect(() => {
-    const usersData = JSON.parse(localStorage.getItem('users') || '[]');
-    const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
-    const foundUser = usersData.find(u => u.id === userId);
+    const fetchUserProfile = async () => {
+      try {
+        setLoading(true);
+        
+        // Buscar usuario en Supabase
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-    if (foundUser) {
-      setProfile(foundUser);
-      
-      if (foundUser.avatarKey) {
-        setAvatarSrc(localStorage.getItem(foundUser.avatarKey));
-      }
-      if (foundUser.portfolioKeys) {
-        const urls = foundUser.portfolioKeys.map(key => localStorage.getItem(key)).filter(Boolean);
-        setPortfolioSrcs(urls);
-      }
+        if (userError || !userData) {
+          toast({ title: "Error", description: "Usuario no encontrado.", variant: "destructive" });
+          navigate(-1);
+          return;
+        }
 
-      const userReviews = allReviews
-        .filter(r => r.revieweeId === userId)
-        .map(review => {
-          const reviewer = usersData.find(u => u.id === review.reviewerId);
-          return { ...review, reviewerName: reviewer?.name || 'Anónimo', reviewerAvatar: reviewer?.avatar };
-        });
-      setReviews(userReviews);
-    } else {
-      toast({ title: "Error", description: "Usuario no encontrado.", variant: "destructive" });
-      navigate(-1);
-    }
-    setLoading(false);
+        console.log('User data from Supabase:', userData);
+        console.log('User userType:', userData.userType);
+        console.log('User avatarKey:', userData.avatarKey);
+        setProfile(userData);
+
+        // Verificar si el usuario tiene servicios
+        const { data: servicesData, error: servicesError } = await supabase
+          .from('briefs')
+          .select('id')
+          .eq('userId', userId)
+          .limit(1);
+
+        if (!servicesError && servicesData && servicesData.length > 0) {
+          console.log('User has services:', servicesData.length);
+          setHasServices(true);
+        } else {
+          console.log('User has no services');
+          setHasServices(false);
+        }
+
+        // Configurar avatar
+        if (userData.avatarKey) {
+          console.log('Setting avatar with key:', userData.avatarKey);
+          const { data: avatarData } = supabase.storage
+            .from('portfolio')
+            .getPublicUrl(userData.avatarKey);
+          console.log('Avatar URL:', avatarData.publicUrl);
+          setAvatarSrc(avatarData.publicUrl);
+        } else {
+          console.log('No avatarKey found for user');
+        }
+
+        // Configurar portfolio
+        if (userData.portfolioKeys && userData.portfolioKeys.length > 0) {
+          const portfolioUrls = userData.portfolioKeys.map(key => {
+            const { data: portfolioData } = supabase.storage
+              .from('portfolio')
+              .getPublicUrl(`portfolio/${key}`);
+            return portfolioData.publicUrl;
+          }).filter(Boolean);
+          setPortfolioSrcs(portfolioUrls);
+        }
+
+        // Buscar reviews del usuario
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select(`
+            *,
+            reviewer:users!reviews_reviewerId_fkey(name, avatarKey)
+          `)
+          .eq('revieweeId', userId);
+
+        if (!reviewsError && reviewsData) {
+          const formattedReviews = reviewsData.map(review => ({
+            ...review,
+            reviewerName: review.reviewer?.name || 'Anónimo',
+            reviewerAvatar: review.reviewer?.avatarKey ? 
+              supabase.storage.from('portfolio').getPublicUrl(review.reviewer.avatarKey).data.publicUrl : 
+              null
+          }));
+          setReviews(formattedReviews);
+        }
+
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        toast({ title: "Error", description: "Error al cargar el perfil.", variant: "destructive" });
+        navigate(-1);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserProfile();
   }, [userId, navigate, toast]);
 
   const avgRating = reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) : 0;
 
-  const getUserTypeColor = (userType) => ({
-    provider: 'provider-gradient',
-    client: 'client-gradient',
-    ngo: 'ngo-gradient',
-    admin: 'admin-gradient'
-  })[userType] || 'bg-gray-500';
+  const getUserTypeColor = (userType, hasServices) => {
+    // Si es ONG, siempre mostrar como ONG
+    if (userType === 'ngo') return 'ngo-gradient';
+    // Si tiene servicios, mostrar como Proveedor
+    if (hasServices) return 'provider-gradient';
+    // Si no tiene servicios y no es ONG, mostrar como Cliente
+    return 'client-gradient';
+  };
 
-  // getUserTypeLabel is now imported from '@/utils/userType'
+  const getUserTypeLabel = (userType, hasServices) => {
+    // Si es ONG, siempre mostrar como ONG
+    if (userType === 'ngo') return 'ONG';
+    // Si tiene servicios, mostrar como Proveedor
+    if (hasServices) return 'Proveedor';
+    // Si no tiene servicios y no es ONG, mostrar como Cliente
+    return 'Cliente';
+  };
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Cargando perfil...</div>;
@@ -88,7 +161,7 @@ const PublicProfilePage = () => {
       <Card>
         <CardHeader><CardTitle>Biografía</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-gray-600 whitespace-pre-wrap">{profile.bio || 'Este usuario aún no ha agregado una biografía.'}</p>
+          <p className="text-gray-600 whitespace-pre-wrap">{typeof profile.bio === 'string' ? profile.bio : 'Este usuario aún no ha agregado una biografía.'}</p>
         </CardContent>
       </Card>
       {profile.skills && (
@@ -96,7 +169,7 @@ const PublicProfilePage = () => {
           <CardHeader><CardTitle>Habilidades</CardTitle></CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {profile.skills.split(',').map((skill, index) => (
+              {(typeof profile.skills === 'string' ? profile.skills.split(',') : []).map((skill, index) => (
                 <Badge key={index} variant="secondary">{skill.trim()}</Badge>
               ))}
             </div>
@@ -124,23 +197,23 @@ const PublicProfilePage = () => {
     <>
       <Card>
         <CardHeader><CardTitle className="flex items-center"><Target className="w-5 h-5 mr-2 text-primary" />Nuestra Misión</CardTitle></CardHeader>
-        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{profile.mission || 'Información no disponible.'}</p></CardContent>
+        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{typeof profile.mission === 'string' ? profile.mission : 'Información no disponible.'}</p></CardContent>
       </Card>
       <Card>
         <CardHeader><CardTitle className="flex items-center"><Eye className="w-5 h-5 mr-2 text-primary" />Nuestra Visión</CardTitle></CardHeader>
-        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{profile.vision || 'Información no disponible.'}</p></CardContent>
+        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{typeof profile.vision === 'string' ? profile.vision : 'Información no disponible.'}</p></CardContent>
       </Card>
       <Card>
         <CardHeader><CardTitle className="flex items-center"><History className="w-5 h-5 mr-2 text-primary" />Nuestra Historia</CardTitle></CardHeader>
-        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{profile.history || 'Información no disponible.'}</p></CardContent>
+        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{typeof profile.history === 'string' ? profile.history : 'Información no disponible.'}</p></CardContent>
       </Card>
       <Card>
         <CardHeader><CardTitle className="flex items-center"><Users className="w-5 h-5 mr-2 text-primary" />Nuestro Equipo</CardTitle></CardHeader>
-        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{profile.team || 'Información no disponible.'}</p></CardContent>
+        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{typeof profile.team === 'string' ? profile.team : 'Información no disponible.'}</p></CardContent>
       </Card>
       <Card>
         <CardHeader><CardTitle className="flex items-center"><Handshake className="w-5 h-5 mr-2 text-primary" />Alianzas Estratégicas</CardTitle></CardHeader>
-        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{profile.partnerships || 'Información no disponible.'}</p></CardContent>
+        <CardContent><p className="text-gray-600 whitespace-pre-wrap">{typeof profile.partnerships === 'string' ? profile.partnerships : 'Información no disponible.'}</p></CardContent>
       </Card>
     </>
   );
@@ -149,7 +222,7 @@ const PublicProfilePage = () => {
     <Card>
       <CardHeader><CardTitle>Biografía</CardTitle></CardHeader>
       <CardContent>
-        <p className="text-gray-600 whitespace-pre-wrap">{profile.bio || 'Este usuario aún no ha agregado una biografía.'}</p>
+        <p className="text-gray-600 whitespace-pre-wrap">{typeof profile.bio === 'string' ? profile.bio : 'Este usuario aún no ha agregado una biografía.'}</p>
       </CardContent>
     </Card>
   );
@@ -168,14 +241,17 @@ const PublicProfilePage = () => {
                 <CardContent className="pt-6 text-center">
                   <Avatar className="w-24 h-24 mb-4 ring-4 ring-offset-2 ring-primary mx-auto">
                     <AvatarImage src={avatarSrc} alt={`Avatar de ${profile.name}`} />
-                    <AvatarFallback className={`${getUserTypeColor(profile.userType)} text-white text-4xl`}>
+                    <AvatarFallback className={`${getUserTypeColor(profile.userType, hasServices)} text-white text-4xl`}>
                       {profile.name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <CardTitle className="text-2xl font-bold">{profile.name}</CardTitle>
                   <CardDescription className="text-md text-muted-foreground">{profile.userType === 'ngo' ? 'Organización No Gubernamental' : profile.titles || 'Miembro de Taskora'}</CardDescription>
                   <div className="mt-2 flex justify-center items-center gap-2">
-                    <Badge className={`${getUserTypeColor(profile.userType)} text-white`}>{getUserTypeLabel(profile.userType)}</Badge>
+                    <Badge className={`${getUserTypeColor(profile.userType, hasServices)} text-white`}>
+                      {console.log('Profile userType:', profile.userType, 'Has services:', hasServices, 'Label:', getUserTypeLabel(profile.userType, hasServices))}
+                      {getUserTypeLabel(profile.userType, hasServices)}
+                    </Badge>
                     {profile.verified && <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Verificado</Badge>}
                   </div>
                   {reviews.length > 0 && (
@@ -190,11 +266,30 @@ const PublicProfilePage = () => {
               <Card>
                 <CardHeader><CardTitle>Información de Contacto</CardTitle></CardHeader>
                 <CardContent className="space-y-3 text-sm text-gray-600">
-                  <li className="flex items-center"><Mail className="w-4 h-4 mr-3 text-primary flex-shrink-0" /> <span className="truncate">{profile.email}</span></li>
-                  {profile.phone && <li className="flex items-center"><Phone className="w-4 h-4 mr-3 text-primary flex-shrink-0" /> {profile.phone}</li>}
-                  {profile.location && <li className="flex items-center"><MapPin className="w-4 h-4 mr-3 text-primary flex-shrink-0" /> {profile.location}</li>}
-                  {profile.address && <li className="flex items-center"><Building className="w-4 h-4 mr-3 text-primary flex-shrink-0" /> {profile.address}</li>}
-                  {profile.website && <li className="flex items-center"><LinkIcon className="w-4 h-4 mr-3 text-primary flex-shrink-0" /> <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">{profile.website}</a></li>}
+                  {profile.phone ? (
+                    <li className="flex items-center">
+                      <Phone className="w-4 h-4 mr-3 text-primary flex-shrink-0" /> 
+                      {profile.phone}
+                    </li>
+                  ) : (
+                    <li className="flex items-center">
+                      <Phone className="w-4 h-4 mr-3 text-gray-400 flex-shrink-0" /> 
+                      Sin Información
+                    </li>
+                  )}
+                  {profile.website ? (
+                    <li className="flex items-center">
+                      <LinkIcon className="w-4 h-4 mr-3 text-primary flex-shrink-0" /> 
+                      <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
+                        {profile.website}
+                      </a>
+                    </li>
+                  ) : (
+                    <li className="flex items-center">
+                      <LinkIcon className="w-4 h-4 mr-3 text-gray-400 flex-shrink-0" /> 
+                      Sin Información
+                    </li>
+                  )}
                 </CardContent>
               </Card>
           </div>

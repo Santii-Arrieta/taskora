@@ -52,7 +52,7 @@ const ReviewCard = ({ review }) => {
                 .single();
 
             if (foundUser) {
-                const avatarUrl = foundUser.avatarKey ? supabase.storage.from('avatars').getPublicUrl(foundUser.avatarKey).data.publicUrl : null;
+                const avatarUrl = foundUser.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(foundUser.avatarKey).data.publicUrl : null;
                 setReviewer({...foundUser, avatarUrl});
             }
         };
@@ -119,7 +119,7 @@ const BriefDetailPage = () => {
         if (authorError || !authorData) {
             toast({ title: "Error", description: "No se pudo encontrar el autor de la publicación.", variant: "destructive" });
         } else {
-             const authorAvatarUrl = authorData.avatarKey ? supabase.storage.from('avatars').getPublicUrl(authorData.avatarKey).data.publicUrl : null;
+             const authorAvatarUrl = authorData.avatarKey ? supabase.storage.from('portfolio').getPublicUrl(authorData.avatarKey).data.publicUrl : null;
              setAuthor({...authorData, avatarUrl: authorAvatarUrl});
         }
 
@@ -337,6 +337,7 @@ const BriefDetailPage = () => {
                   <CardTitle className="text-2xl font-bold text-green-600 flex items-center">
                     <DollarSign className="w-6 h-6 mr-2" />
                     {brief.price}
+                    <span className="ml-1 text-base font-semibold text-green-600">{(brief.priceType || 'total') === 'por_hora' ? '/hora' : '/unico'}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

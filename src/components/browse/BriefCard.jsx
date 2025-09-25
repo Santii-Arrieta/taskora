@@ -60,7 +60,14 @@ const BriefCard = ({ brief, index, user, isFavorite, onToggleFavorite, onApply, 
             <div>
               <p className="text-sm text-muted-foreground line-clamp-3 mb-4">{brief.description}</p>
               <div className="flex items-center justify-between text-sm text-gray-500 mb-4"><div className="flex items-center space-x-4"><span className="flex items-center"><Eye className="w-4 h-4 mr-1" />{brief.views || 0}</span><span className="flex items-center"><Users className="w-4 h-4 mr-1" />{brief.applications?.length || 0}</span></div><Badge variant="secondary">{categoryMap[brief.category] || brief.category}</Badge></div>
-              <div className="flex items-center justify-between mb-4"><div className="flex items-center text-lg font-bold text-green-600"><DollarSign className="w-5 h-5" />{brief.price}</div><div className="flex items-center text-sm text-gray-500"><Clock className="w-4 h-4 mr-1" />{brief.deliveryTime} días</div></div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center text-lg font-bold text-green-600">
+                  <DollarSign className="w-5 h-5" />
+                  {brief.price}
+                  <span className="ml-1 text-sm font-semibold text-green-600">{(brief.priceType || 'total') === 'por_hora' ? '/hora' : '/unico'}</span>
+                </div>
+                <div className="flex items-center text-sm text-gray-500"><Clock className="w-4 h-4 mr-1" />{brief.deliveryTime} días</div>
+              </div>
               <div className="flex items-center text-sm text-muted-foreground">
                 {brief.serviceType === 'presencial' ? <MapPin className="w-4 h-4 mr-1" /> : <Globe className="w-4 h-4 mr-1" />}
                 {brief.serviceType === 'presencial' ? `Presencial (Radio: ${brief.radius}km)` : 'Online'}

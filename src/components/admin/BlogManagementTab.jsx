@@ -17,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
+import { useImageOptimization } from '@/hooks/useImageOptimization';
+import { ImageOptimizationStats } from '@/components/ui/image-optimization-stats';
 
 const initialPostState = {
   type: 'article',
@@ -32,6 +34,7 @@ const initialPostState = {
 const BlogManagementTab = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { optimizeSingleImage, isOptimizing, optimizationStats } = useImageOptimization();
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -60,19 +63,34 @@ const BlogManagementTab = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `blog/${fileName}`;
+    try {
+      // Optimizar la imagen antes de subir
+      const optimizedImage = await optimizeSingleImage(file);
+      
+      const fileName = `${Math.random()}.webp`;
+      const filePath = `blog/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage.from('portfolio').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('portfolio').upload(filePath, optimizedImage);
 
-    if (uploadError) {
-      toast({ title: 'Error de subida', description: `No se pudo subir la imagen. ${uploadError.message}`, variant: 'destructive' });
-      return;
+      if (uploadError) {
+        toast({ title: 'Error de subida', description: `No se pudo subir la imagen. ${uploadError.message}`, variant: 'destructive' });
+        return;
+      }
+
+      const { data } = supabase.storage.from('portfolio').getPublicUrl(filePath);
+      setPostData(prev => ({ ...prev, image: data.publicUrl }));
+      
+      // Mostrar estadísticas de optimización
+      if (optimizationStats && optimizationStats.reduction > 0) {
+        toast({ 
+          title: 'Imagen optimizada', 
+          description: `Tamaño reducido en ${optimizationStats.reduction}%` 
+        });
+      }
+    } catch (error) {
+      console.error('Error optimizando imagen del blog:', error);
+      toast({ title: 'Error', description: 'Error al procesar la imagen.', variant: 'destructive' });
     }
-
-    const { data } = supabase.storage.from('portfolio').getPublicUrl(filePath);
-    setPostData(prev => ({ ...prev, image: data.publicUrl }));
   };
 
   const handleSave = async () => {
@@ -235,12 +253,30 @@ const BlogManagementTab = () => {
                 <Label>Imagen de portada</Label>
                 <div className="flex items-center gap-4 mt-2">
                     <img src={postData.image || "https://placehold.co/400x200?text=Sube+una+imagen"} alt="Vista previa" className="w-24 h-24 object-cover rounded-md border" />
-                    <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()}>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={isOptimizing}
+                    >
                         <Upload className="w-4 h-4 mr-2" />
-                        Cambiar Imagen
+                        {isOptimizing ? 'Optimizando...' : 'Cambiar Imagen'}
                     </Button>
-                    <input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                    <input 
+                      type="file" 
+                      ref={imageInputRef} 
+                      onChange={handleImageUpload} 
+                      accept="image/*" 
+                      className="hidden" 
+                    />
                 </div>
+                
+                {/* Mostrar estadísticas de optimización */}
+                {optimizationStats && (
+                  <div className="mt-3">
+                    <ImageOptimizationStats stats={optimizationStats} showDetails={false} />
+                  </div>
+                )}
             </div>
             <Textarea placeholder="Contenido (usa ### para títulos)" value={postData.content} onChange={e => setPostData({...postData, content: e.target.value})} rows={10} />
           </div>

@@ -18,6 +18,9 @@ import { supabase } from '@/lib/customSupabaseClient';
 const WalletPage = () => {
   const { user, updateProfile } = useAuth();
   const { balance, escrow, transactions, withdrawFunds } = useWallet();
+  
+  // Debug: mostrar balance actual
+  console.log('Balance actual:', balance);
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -26,6 +29,107 @@ const WalletPage = () => {
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
+  
+  // Función para procesar pagos manualmente
+  const testVerifyPayment = async (paymentId) => {
+    try {
+      console.log('Procesando pago manualmente:', { paymentId, userId: user.id });
+      
+      const { data, error } = await supabase.functions.invoke('verify-payment', {
+        body: { 
+          paymentId: paymentId,
+          userId: user.id 
+        }
+      });
+      
+      console.log('Respuesta de verify-payment:', { data, error });
+      
+      if (error) {
+        console.error('Error en verify-payment:', error);
+        toast({
+          title: "Error",
+          description: `Error: ${error.message || 'No se pudo procesar el pago'}`
+        });
+        return;
+      }
+      
+      if (data?.success) {
+        toast({
+          title: "Pago Procesado",
+          description: `Saldo actualizado: ${formatCurrency(data.newBalance)}`
+        });
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        toast({
+          title: "Error",
+          description: `Error: ${data?.error || 'No se pudo procesar'}`
+        });
+      }
+    } catch (error) {
+      console.error('Error catch:', error);
+      toast({
+        title: "Error",
+        description: "Error al procesar el pago"
+      });
+    }
+  };
+
+  // Función para limpiar transacciones duplicadas
+  const cleanupDuplicateTransactions = async () => {
+    try {
+      console.log('Limpiando transacciones duplicadas...');
+      
+      // Eliminar TODAS las transacciones del usuario (limpieza completa)
+      const { error: deleteError } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('userId', user.id);
+
+      if (deleteError) {
+        console.error('Error eliminando transacciones:', deleteError);
+        toast({
+          title: "Error",
+          description: `Error: ${deleteError.message}`
+        });
+        return;
+      }
+
+      // Resetear saldo a 0
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ balance: 0 })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Error reseteando saldo:', updateError);
+        toast({
+          title: "Error",
+          description: `Error: ${updateError.message}`
+        });
+        return;
+      }
+
+      console.log('Todas las transacciones eliminadas y saldo reseteado');
+      
+      toast({
+        title: "Limpieza Completa",
+        description: "Todas las transacciones eliminadas y saldo reseteado a $0"
+      });
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error catch:', error);
+      toast({
+        title: "Error",
+        description: "Error al limpiar transacciones"
+      });
+    }
+  };
   const [preferenceId, setPreferenceId] = useState(null);
   const [isProcessing, setIsLoading] = useState(false);
   const [paymentError, setPaymentError] = useState(false);
@@ -34,14 +138,62 @@ const WalletPage = () => {
     const query = new URLSearchParams(location.search);
     const paymentStatus = query.get('status');
     const paymentId = query.get('payment_id');
-    if (paymentStatus === 'approved' && paymentId) {
-      toast({
-        title: "Pago Aprobado",
-        description: `Tu pago con ID ${paymentId} ha sido aprobado. Tu saldo se actualizará pronto.`
-      });
+    const collectionId = query.get('collection_id');
+    
+    console.log('URL params:', { paymentStatus, paymentId, collectionId, search: location.search });
+    
+    if (paymentStatus === 'approved' && (paymentId || collectionId)) {
+      // Verificar y actualizar saldo si es necesario
+      const verifyAndUpdateBalance = async () => {
+        try {
+          console.log('Verificando pago automáticamente:', { paymentId, collectionId, userId: user.id });
+          
+          const { data, error } = await supabase.functions.invoke('verify-payment', {
+            body: { 
+              paymentId: paymentId || collectionId,
+              userId: user.id 
+            }
+          });
+          
+          console.log('Respuesta de verify-payment:', { data, error });
+          
+          if (error) {
+            console.error('Error en verify-payment:', error);
+            toast({
+              title: "Error al procesar pago",
+              description: `Error: ${error.message || 'No se pudo procesar el pago'}`
+            });
+            return;
+          }
+          
+          if (data?.success) {
+            toast({
+              title: "Pago Confirmado",
+              description: `Tu pago ha sido procesado. Saldo actualizado: ${formatCurrency(data.newBalance)}`
+            });
+            // Refrescar datos del wallet
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          } else {
+            toast({
+              title: "Pago Aprobado",
+              description: `Tu pago con ID ${paymentId || collectionId} ha sido aprobado. Tu saldo se actualizará pronto.`
+            });
+          }
+        } catch (error) {
+          console.error('Error catch:', error);
+          toast({
+            title: "Pago Aprobado",
+            description: `Tu pago con ID ${paymentId || collectionId} ha sido aprobado. Tu saldo se actualizará pronto.`
+          });
+        }
+      };
+      
+      verifyAndUpdateBalance();
       navigate('/wallet', { replace: true });
     }
-  }, [location.search, toast, navigate]);
+  }, [location.search, toast, navigate, user.id]);
 
   const formatCurrency = (amount) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount || 0);
 
@@ -60,12 +212,12 @@ const WalletPage = () => {
         currency_id: 'ARS'
       }],
       back_urls: {
-        success: `${window.location.origin}/wallet`,
-        failure: `${window.location.origin}/wallet`
+        success: 'https://taskora.webexperiencepro.com/wallet?status=approved',
+        failure: 'https://taskora.webexperiencepro.com/wallet?status=failure',
+        pending: 'https://taskora.webexperiencepro.com/wallet?status=pending'
       },
       auto_return: 'approved',
-      external_reference: `deposit_${user.id}_${Date.now()}`,
-      notification_url: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mp-webhook`
+      external_reference: `deposit_${user.id}_${Date.now()}`
     };
 
     try {
@@ -235,6 +387,31 @@ const WalletPage = () => {
                   <Button onClick={handleDepositClick} className="bg-white text-gray-900 hover:bg-gray-200"><Plus className="w-4 h-4 mr-2" />Depositar</Button>
                   <Button variant="outline" className="bg-transparent border-gray-400 text-white hover:bg-gray-700" onClick={handleWithdrawClick}>Retirar</Button>
                 </div>
+                
+                {/* Botón temporal para procesar pagos manualmente */}
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    const paymentId = prompt('Ingresa el ID del pago de Mercado Pago:');
+                    if (paymentId) {
+                      testVerifyPayment(paymentId);
+                    }
+                  }}
+                  className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  🔧 Procesar Pago Manualmente
+                </Button>
+                
+                {/* Botón temporal para limpiar transacciones duplicadas - OCULTO */}
+                {false && (
+                  <Button 
+                    variant="destructive" 
+                    onClick={cleanupDuplicateTransactions}
+                    className="w-full mt-2 bg-orange-600 hover:bg-orange-700"
+                  >
+                    🧹 Limpiar TODAS las Transacciones
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </motion.div>

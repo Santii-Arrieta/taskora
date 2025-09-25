@@ -3,7 +3,11 @@ import { MapContainer, TileLayer, Marker, useMap, Circle } from 'react-leaflet';
 import { Icon } from 'leaflet';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { Search } from 'lucide-react';
+import LocationDropdown from './LocationDropdown';
+import { ArgentinaGeocodingService } from '@/lib/argentinaGeocoding';
 
 const customIcon = new Icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
@@ -71,40 +75,48 @@ const InvalidateSizeOnMount = () => {
   return null;
 };
 
-const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggable = true, onSearchSubmit, height = '60vh' }) => {
+const LocationPicker = ({ value, onChange, radius = 10, showSearch = true, isDraggable = true, onSearchSubmit, height = '60vh', showRadius = true }) => {
   const [currentValue, setCurrentValue] = useState(value);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentRadius, setCurrentRadius] = useState(radius);
 
   useEffect(() => {
     setCurrentValue(value);
-  }, [value]);
+    setCurrentRadius(radius);
+    
+    // Si hay un valor inicial, hacer reverse geocoding para obtener el nombre
+    if (value && value.lat && value.lng) {
+      ArgentinaGeocodingService.reverseGeocode(value.lat, value.lng)
+        .then(locationName => {
+          setSearchQuery(locationName);
+        })
+        .catch(error => {
+          console.error('Error getting location name:', error);
+          setSearchQuery('Ubicación seleccionada');
+        });
+    }
+  }, [value, radius]);
 
   const handleMapClick = (e) => {
     if (!isDraggable) return;
     const { lat, lng } = e.latlng;
     const newLocation = { lat, lng };
     setCurrentValue(newLocation);
-    if (onChange) onChange(newLocation);
+    if (onChange) onChange(newLocation, currentRadius);
   };
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery) return;
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}`);
-      const data = await response.json();
-      if (data && data.length > 0) {
-        const { lat, lon } = data[0];
-        const newLocation = { lat: parseFloat(lat), lng: parseFloat(lon) };
-        setCurrentValue(newLocation);
-        if (onChange) onChange(newLocation);
-        if (onSearchSubmit) onSearchSubmit(newLocation);
-      } else {
-        alert('Ubicación no encontrada.');
-      }
-    } catch (error) {
-      console.error('Error searching for location:', error);
-      alert('Error al buscar la ubicación.');
+  const handleLocationSelect = (location, displayName) => {
+    setCurrentValue(location);
+    setSearchQuery(displayName);
+    if (onChange) onChange(location, currentRadius);
+    if (onSearchSubmit) onSearchSubmit(location);
+  };
+
+  const handleRadiusChange = (newRadius) => {
+    setCurrentRadius(newRadius);
+    // Siempre llamar al callback con el radio, incluso si no hay ubicación
+    if (onChange) {
+      onChange(currentValue, newRadius);
     }
   };
 
@@ -114,18 +126,35 @@ const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggabl
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {showSearch && (
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <Input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar dirección..."
-          />
-          <Button type="submit" size="icon" variant="outline"><Search className="w-4 h-4" /></Button>
-        </form>
+        <LocationDropdown
+          value={searchQuery}
+          onChange={handleLocationSelect}
+          placeholder="Buscar ubicación en Argentina..."
+          onLocationSelect={handleLocationSelect}
+        />
       )}
+      
+      {showRadius && currentValue && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Radio de búsqueda: {currentRadius} km
+          </Label>
+          <Slider
+            min={1}
+            max={100}
+            step={1}
+            value={[currentRadius]}
+            onValueChange={(value) => handleRadiusChange(value[0])}
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">
+            Este radio se usará para encontrar servicios cerca de tu ubicación
+          </p>
+        </div>
+      )}
+      
       <div className="w-full rounded-md overflow-hidden z-0" style={{ height }}>
         <MapContainer center={currentValue || [-34.6037, -58.3816]} zoom={13} style={{ height: '100%', width: '100%' }}>
           <InvalidateSizeOnMount />
@@ -134,11 +163,11 @@ const LocationPicker = ({ value, onChange, radius, showSearch = true, isDraggabl
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
           <DraggableMarker value={currentValue} onChange={onChange} isDraggable={isDraggable} />
-          {currentValue && radius && (
+          {currentValue && currentRadius && (
             <Circle
               center={currentValue}
               pathOptions={{ color: 'blue', fillColor: 'blue', fillOpacity: 0.2 }}
-              radius={radius * 1000} // radius in meters
+              radius={currentRadius * 1000} // radius in meters
             />
           )}
           <MapEvents />

@@ -20,8 +20,21 @@ const StarRating = ({ rating }) => (
 );
 
 const Filters = ({ filters, setFilters, onUseMyPosition }) => {
-  const handleLocationChange = (location) => {
-    setFilters(prev => ({ ...prev, searchLocation: location, searchLocationSource: 'filter' }));
+  const handleLocationChange = (location, radius) => {
+    setFilters(prev => ({ 
+      ...prev, 
+      searchLocation: location, 
+      searchLocationSource: 'manual', // Cambiar a 'manual' cuando el usuario modifica
+      searchRadius: radius || prev.searchRadius
+    }));
+  };
+
+  const handleRadiusChange = (newRadius) => {
+    setFilters(prev => ({ 
+      ...prev, 
+      searchRadius: newRadius,
+      searchLocationSource: 'manual' // Cambiar a 'manual' cuando el usuario modifica el radio
+    }));
   };
 
   return (
@@ -51,14 +64,23 @@ const Filters = ({ filters, setFilters, onUseMyPosition }) => {
                 </div>
                 {filters.serviceType === 'presencial' && (
                   <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1 p-2 border rounded-md">
-                    <Label className="text-xs">Ubicación y Radio de Búsqueda</Label>
-                    <Button variant="link" className="p-0 h-auto text-xs" onClick={onUseMyPosition}>Usar mi ubicación guardada</Button>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Ubicación y Radio de Búsqueda</Label>
+                      <Button 
+                        variant="link" 
+                        className={`p-0 h-auto text-xs ${filters.searchLocationSource === 'saved' ? 'text-green-600 font-semibold' : 'text-blue-600'}`}
+                        onClick={onUseMyPosition}
+                      >
+                        {filters.searchLocationSource === 'saved' ? '✓ Usando ubicación guardada' : 'Usar mi ubicación guardada'}
+                      </Button>
+                    </div>
                     <Suspense fallback={<div>Cargando mapa...</div>}>
                       <LocationPicker
                         value={filters.searchLocation}
                         onChange={handleLocationChange}
                         radius={filters.searchRadius}
                         height="28vh"
+                        showRadius={false}
                       />
                     </Suspense>
                     <div className="space-y-1">
@@ -66,7 +88,7 @@ const Filters = ({ filters, setFilters, onUseMyPosition }) => {
                       <Slider
                         min={1} max={200} step={1}
                         value={[filters.searchRadius]}
-                        onValueChange={(value) => setFilters(prev => ({ ...prev, searchRadius: value[0] }))}
+                        onValueChange={(value) => handleRadiusChange(value[0])}
                       />
                     </div>
                   </motion.div>
