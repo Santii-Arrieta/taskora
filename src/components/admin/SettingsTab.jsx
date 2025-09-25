@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { KeyRound, Save, Mail, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
+import { sendTransactionalEmail } from '@/lib/email';
 
 const SettingsTab = () => {
   const { toast } = useToast();
@@ -20,6 +21,8 @@ const SettingsTab = () => {
     pass: ''
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testEmail, setTestEmail] = useState('admin@taskora.webexperiencepro.com');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -123,6 +126,34 @@ const SettingsTab = () => {
     setIsLoading(false);
   };
 
+  const handleSendTestEmail = async () => {
+    if (!testEmail) {
+      toast({ title: 'Email requerido', description: 'Ingresá un correo destino para la prueba.', variant: 'destructive' });
+      return;
+    }
+    setIsSendingTest(true);
+    try {
+      const html = `
+        <div style="font-family: Arial, Helvetica, sans-serif; color: #0B132B;">
+          <h2 style="margin-bottom:8px;">Prueba SMTP Taskora</h2>
+          <p>Este es un envío de prueba del servicio SMTP configurado.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
+          <p style="font-size:12px;color:#64748b;">Si ves este correo, la configuración SMTP está funcionando correctamente.</p>
+        </div>
+      `;
+      await sendTransactionalEmail({
+        to: testEmail,
+        subject: 'Prueba SMTP Taskora',
+        html,
+      });
+      toast({ title: 'Prueba enviada', description: `Se envió un correo a ${testEmail}.` });
+    } catch (error) {
+      toast({ title: 'Error', description: error?.message || 'No se pudo enviar el correo de prueba.', variant: 'destructive' });
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -205,11 +236,23 @@ const SettingsTab = () => {
                   <Label htmlFor="smtp-pass">Contraseña</Label>
                   <Input id="smtp-pass" name="pass" type="password" value={smtpSettings.pass} onChange={handleSmtpInputChange} placeholder="••••••••" />
               </div>
-              <div className="flex justify-end">
+              <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+                <div className="flex gap-2">
                   <Button onClick={handleSaveSmtpSettings} disabled={isLoading}>
                       {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                       Guardar Configuración SMTP
                   </Button>
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="w-64">
+                    <Label htmlFor="test-email">Enviar prueba a</Label>
+                    <Input id="test-email" type="email" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="destinatario@correo.com" />
+                  </div>
+                  <Button onClick={handleSendTestEmail} disabled={isSendingTest}>
+                    {isSendingTest ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+                    Enviar email de prueba
+                  </Button>
+                </div>
               </div>
             </>
           )}

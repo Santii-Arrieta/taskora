@@ -26,6 +26,7 @@ import WalletPage from '@/pages/WalletPage';
 import SupportPage from '@/pages/SupportPage';
 import WhyTaskoraPage from '@/pages/WhyTaskoraPage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import CommunityPage from '@/pages/CommunityPage';
 import BlogArticlePage from '@/pages/BlogArticlePage';
 import { Toaster } from '@/components/ui/toaster';
@@ -119,6 +120,8 @@ const AppRoutes = () => {
           <Route path="/login" element={<LoggedOutRoute><LoginPage /></LoggedOutRoute>} />
           <Route path="/register" element={<LoggedOutRoute><RegisterPage /></LoggedOutRoute>} />
           <Route path="/forgot-password" element={<LoggedOutRoute><ForgotPasswordPage /></LoggedOutRoute>} />
+          {/* Permitir acceso a reset-password incluso con sesión activa (enlace de recuperación crea una sesión temporal) */}
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/why-taskora" element={<WhyTaskoraPage />} />
