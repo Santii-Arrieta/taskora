@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, lazy, Suspense, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -79,10 +79,23 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
     type: user?.userType === 'ngo' ? 'opportunity' : 'service'
   });
   const [selectedBriefApplicants, setSelectedBriefApplicants] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [catQuery, setCatQuery] = useState('');
   
   const canPublish = user?.userType === 'provider' || user?.userType === 'ngo';
   const isVerified = user?.verified;
   const canCreateBrief = isVerified && briefs.length < MAX_BRIEFS && canPublish;
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      const { data, error } = await supabase.from('categories').select('id,name,slug').order('name', { ascending: true });
+      if (!error && data) setCategories(data);
+    };
+    loadCategories();
+  }, []);
+
+  const filteredCategories = categories
+    .filter(c => c.name.toLowerCase().includes(catQuery.toLowerCase()));
 
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
@@ -226,7 +239,27 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
               <Input placeholder="Título" value={newBrief.title} onChange={(e) => setNewBrief({...newBrief, title: e.target.value})} required />
               <Textarea placeholder="Descripción detallada del servicio/oportunidad" value={newBrief.description} onChange={(e) => setNewBrief({...newBrief, description: e.target.value})} required rows={5}/>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Select value={newBrief.category} onValueChange={(v) => setNewBrief({...newBrief, category: v})}><SelectTrigger><SelectValue placeholder="Categoría" /></SelectTrigger><SelectContent><SelectItem value="design">Diseño</SelectItem><SelectItem value="development">Desarrollo</SelectItem><SelectItem value="marketing">Marketing</SelectItem><SelectItem value="writing">Redacción</SelectItem></SelectContent></Select>
+                <Select
+                  value={newBrief.category_id || ''}
+                  onValueChange={(v) => {
+                    const selected = categories.find(c => c.id === v);
+                    setNewBrief(prev => ({ ...prev, category_id: v, category: selected?.slug || prev.category }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <div className="p-2">
+                      <Input placeholder="Buscar categoría..." value={catQuery} onChange={(e) => setCatQuery(e.target.value)} />
+                    </div>
+                    {filteredCategories.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">Sin resultados</div>
+                    ) : filteredCategories.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Input placeholder="Duración/Entrega (días)" type="number" value={newBrief.deliveryTime} onChange={(e) => setNewBrief({...newBrief, deliveryTime: e.target.value})} required />
               </div>
               <div className="relative">
