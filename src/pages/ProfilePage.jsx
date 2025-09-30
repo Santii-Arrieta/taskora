@@ -34,7 +34,7 @@ const ProfilePage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' });
-  const [mpData, setMpData] = useState({ mp_cbu_alias: '', mp_full_name: '' });
+  const [mpData, setMpData] = useState({ mp_withdrawal_email: '' });
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -56,8 +56,7 @@ const ProfilePage = () => {
         searchRadius: user.searchRadius || 10,
       });
       setMpData({
-        mp_cbu_alias: user.mp_cbu_alias || '',
-        mp_full_name: user.mp_full_name || '',
+        mp_withdrawal_email: user.mp_withdrawal_email || '',
       });
       setLoading(false);
     }
@@ -147,14 +146,14 @@ const ProfilePage = () => {
 
   const handleConnectMercadoPago = async (e) => {
     e.preventDefault();
-    if (!mpData.mp_cbu_alias || !mpData.mp_full_name) {
-        toast({ title: "Datos requeridos", description: "Por favor, completa todos los campos.", variant: "destructive" });
+    if (!mpData.mp_withdrawal_email) {
+        toast({ title: "Email requerido", description: "Por favor, ingresa el email donde quieres recibir los retiros.", variant: "destructive" });
         return;
     }
     setIsSaving(true);
     await updateProfile(mpData);
     setIsSaving(false);
-    toast({ title: "¡Cuenta conectada!", description: "Tus datos de Mercado Pago han sido guardados." });
+    toast({ title: "¡Email configurado!", description: "El email para retiros ha sido guardado." });
   };
 
   if (loading || authLoading) {
@@ -252,36 +251,42 @@ const ProfilePage = () => {
                     <CardDescription>Conecta tu cuenta de Mercado Pago para retirar tus ganancias.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {user.mp_cbu_alias ? (
+                    {user.mp_withdrawal_email ? (
                         <div className="p-4 rounded-md bg-green-50 border border-green-200 flex items-center gap-4">
                             <CheckCircle className="w-8 h-8 text-green-600" />
                             <div>
-                                <p className="font-semibold text-green-800">Tu cuenta de Mercado Pago está conectada.</p>
-                                <p className="text-sm text-green-700">Alias/CVU: {user.mp_cbu_alias}</p>
+                                <p className="font-semibold text-green-800">Email para retiros configurado.</p>
+                                <p className="text-sm text-green-700">Email: {user.mp_withdrawal_email}</p>
                             </div>
                         </div>
                     ) : null}
                     <form onSubmit={handleConnectMercadoPago} className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="mp_cbu_alias">CBU / CVU / Alias</Label>
-                            <Input id="mp_cbu_alias" type="text" value={mpData.mp_cbu_alias} onChange={(e) => setMpData(p => ({...p, mp_cbu_alias: e.target.value}))} placeholder="Tu CBU, CVU o alias de Mercado Pago"/>
+                            <Label htmlFor="mp_withdrawal_email">Email para retiros</Label>
+                            <Input 
+                                id="mp_withdrawal_email" 
+                                type="email" 
+                                value={mpData.mp_withdrawal_email} 
+                                onChange={(e) => setMpData(p => ({...p, mp_withdrawal_email: e.target.value}))} 
+                                placeholder="email@ejemplo.com"
+                            />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="mp_full_name">Nombre completo del titular</Label>
-                            <Input id="mp_full_name" type="text" value={mpData.mp_full_name} onChange={(e) => setMpData(p => ({...p, mp_full_name: e.target.value}))} placeholder="Tal como figura en la cuenta"/>
-                        </div>
-                        <Card className="bg-yellow-50 border-yellow-200">
+                        <Card className="bg-blue-50 border-blue-200">
                             <CardContent className="p-3 flex items-start gap-3">
-                                <AlertCircle className="w-10 h-10 text-yellow-600 mt-1"/>
+                                <AlertCircle className="w-10 h-10 text-blue-600 mt-1"/>
                                 <div>
-                                    <p className="font-semibold text-yellow-800 text-sm">Importante</p>
-                                    <p className="text-xs text-yellow-700">Asegúrate de que los datos sean correctos para poder recibir tus pagos. Esta información es confidencial.</p>
+                                    <p className="font-semibold text-blue-800 text-sm">Información importante</p>
+                                    <p className="text-xs text-blue-700">
+                                        Los retiros se enviarán a este email a través de Mercado Pago. 
+                                        Asegúrate de que este email esté vinculado a tu cuenta de Mercado Pago 
+                                        para poder recibir los fondos.
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>
                         <Button type="submit" disabled={isSaving}>
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
-                            {user.mp_cbu_alias ? 'Actualizar Datos' : 'Guardar Datos'}
+                            {user.mp_withdrawal_email ? 'Actualizar Email' : 'Guardar Email'}
                         </Button>
                     </form>
                 </CardContent>

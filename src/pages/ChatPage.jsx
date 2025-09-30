@@ -23,7 +23,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 const ChatPage = () => {
   const { user } = useAuth();
   const { conversations, activeConversation, setActiveConversation, sendMessage, markAsRead, chatSettings, toggleMute, toggleBlock, toggleStar, clearChat, refreshActiveConversationMessages, messages } = useChat();
-  const { createContract } = useContract();
+  const { createContract, contracts } = useContract();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [message, setMessage] = useState('');
@@ -93,12 +93,32 @@ const ChatPage = () => {
     setIsAcceptOfferOpen(true);
   };
 
-  const handleAcceptOffer = () => {
-    if (!selectedOffer) return;
+  const handleAcceptOffer = async () => {
+    if (!selectedOffer || isProcessing) return;
     
     setIsProcessing(true);
-    setTimeout(() => {
-      const result = createContract(selectedOffer);
+    
+    try {
+      // Verificar si ya existe un contrato para esta oferta
+      const existingContract = contracts.find(c => 
+        c.title === selectedOffer.title && 
+        c.providerId === selectedOffer.providerId && 
+        c.clientId === selectedOffer.clientId &&
+        c.status === 'active'
+      );
+      
+      if (existingContract) {
+        toast({ 
+          title: "Error", 
+          description: "Ya existe un contrato activo para esta oferta.", 
+          variant: "destructive" 
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      const result = await createContract(selectedOffer);
+      
       if (result.success) {
         toast({ title: "¡Contrato iniciado!", description: "Has aceptado y pagado la oferta. El trabajo ha comenzado." });
         sendMessage(activeConversation.id, { contractId: result.contract.id, title: selectedOffer.title }, 'offer_accepted');
@@ -107,8 +127,16 @@ const ChatPage = () => {
       } else {
         toast({ title: "Error", description: result.message, variant: "destructive" });
       }
+    } catch (error) {
+      console.error('Error accepting offer:', error);
+      toast({ 
+        title: "Error", 
+        description: "Ocurrió un error al procesar el pago. Inténtalo de nuevo.", 
+        variant: "destructive" 
+      });
+    } finally {
       setIsProcessing(false);
-    }, 5000);
+    }
   };
 
   const getOtherParticipant = (conversation) => {
@@ -132,7 +160,7 @@ const ChatPage = () => {
       case 'file':
         return <a href={msg.content.url} download={msg.content.name} className="flex items-center bg-gray-200 p-2 rounded-lg hover:bg-gray-300"><FileText className="w-6 h-6 mr-2" /><div><p className="font-medium text-sm">{msg.content.name}</p><p className="text-xs text-gray-600">{(msg.content.size / 1024).toFixed(2)} KB</p></div></a>;
       case 'offer':
-        return <Card className="bg-white shadow-lg border-primary border-2"><CardHeader className="bg-primary/10"><div className="flex items-center justify-between"><CardTitle className="flex items-center text-primary"><FileSignature className="w-5 h-5 mr-2" />Oferta de Trabajo</CardTitle><Avatar className="w-8 h-8"><AvatarImage src={msg.content.providerAvatar} /><AvatarFallback>{msg.content.providerName.charAt(0)}</AvatarFallback></Avatar></div></CardHeader><CardContent className="p-4 space-y-3"><p className="font-semibold text-lg">{msg.content.title}</p><p className="text-sm text-muted-foreground">{msg.content.description}</p><div className="flex items-center justify-between pt-2"><p className="text-2xl font-bold text-green-600 flex items-center"><DollarSign className="w-6 h-6 mr-1" />{msg.content.price}</p>{user.userType === 'client' && <Button onClick={() => openAcceptOfferDialog(msg.content)}>Aceptar y Pagar</Button>}</div></CardContent></Card>;
+        return <Card className="bg-white shadow-lg border-primary border-2"><CardHeader className="bg-primary/10"><div className="flex items-center justify-between"><CardTitle className="flex items-center text-primary"><FileSignature className="w-5 h-5 mr-2" />Oferta de Trabajo</CardTitle><Avatar className="w-8 h-8"><AvatarImage src={msg.content.providerAvatar} /><AvatarFallback>{msg.content.providerName.charAt(0)}</AvatarFallback></Avatar></div></CardHeader><CardContent className="p-4 space-y-3"><p className="font-semibold text-lg">{msg.content.title}</p><p className="text-sm text-muted-foreground">{msg.content.description}</p><div className="flex items-center justify-between pt-2"><p className="text-2xl font-bold text-green-600 flex items-center"><DollarSign className="w-6 h-6 mr-1" />{msg.content.price}</p>{user.userType === 'client' && <Button onClick={() => openAcceptOfferDialog(msg.content)} disabled={isProcessing}>{isProcessing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Procesando...</> : 'Aceptar y Pagar'}</Button>}</div></CardContent></Card>;
       case 'offer_accepted':
         return <div className="p-3 rounded-lg bg-green-100 text-green-800 flex items-center gap-3"><CheckCircle className="w-6 h-6 text-green-600" /><div className="flex-1"><p className="font-semibold">¡Oferta Aceptada!</p><p className="text-sm">El contrato para "{msg.content.title}" ha comenzado.</p><Button variant="link" className="p-0 h-auto text-green-800" onClick={() => navigate('/dashboard')}>Ver en el dashboard</Button></div></div>;
       default:
@@ -265,8 +293,19 @@ const ChatPage = () => {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAcceptOfferOpen(false)}>Cancelar</Button>
-                <Button onClick={handleAcceptOffer}>Confirmar y Pagar</Button>
+                <Button variant="outline" onClick={() => setIsAcceptOfferOpen(false)} disabled={isProcessing}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleAcceptOffer} disabled={isProcessing}>
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    'Confirmar y Pagar'
+                  )}
+                </Button>
               </DialogFooter>
             </DialogContent>
           )}

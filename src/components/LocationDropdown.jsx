@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, MapPin, Loader2 } from 'lucide-react';
-import { ArgentinaGeocodingService } from '@/lib/argentinaGeocoding';
+import { OptimizedArgentinaGeocodingService } from '@/lib/optimizedArgentinaGeocoding';
 
 const LocationDropdown = ({ 
   value, 
@@ -55,7 +55,7 @@ const LocationDropdown = ({
       
       timeoutRef.current = setTimeout(async () => {
         try {
-          const results = await ArgentinaGeocodingService.searchLocations(query, 8);
+          const results = await OptimizedArgentinaGeocodingService.searchLocations(query, 8);
           setSuggestions(results);
           setSelectedIndex(-1);
         } catch (error) {

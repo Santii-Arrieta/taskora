@@ -50,10 +50,19 @@ export const WalletProvider = ({ children }) => {
       date: new Date().toISOString(),
       mp_payment_id: mpPaymentId,
     };
+    console.log('📝 Adding transaction:', newTransaction);
     const added = await addData('transactions', newTransaction);
+    console.log('📝 Transaction added result:', added);
+    
+    // Solo actualizar el estado local si es para el usuario actual
     if(added && userId === user?.id) {
+        console.log('📝 Updating local transactions state');
         setTransactions(prev => [added, ...prev]);
+    } else if (added) {
+        console.log('📝 Transaction added for different user:', userId);
     }
+    
+    return added;
   }, [addData, user]);
 
   const depositFunds = useCallback(async (amount, description, mpPaymentId) => {
@@ -64,48 +73,113 @@ export const WalletProvider = ({ children }) => {
   }, [user, updateProfile, addTransaction]);
 
   const withdrawFunds = useCallback(async (amount, description) => {
-    if (!user || (user.balance || 0) < amount) {
-      return { success: false, message: 'Fondos insuficientes.' };
+    if (!user) return { success: false, message: 'Usuario no autenticado.' };
+
+    try {
+      console.log('🚀 Starting withdrawFunds:', { amount, description, userId: user.id });
+      
+      // Verificar que el usuario tenga email de retiro configurado
+      if (!user.mp_withdrawal_email) {
+        return { 
+          success: false, 
+          message: 'Debes configurar el email donde quieres recibir los retiros antes de realizar retiros.' 
+        };
+      }
+
+      // Usar función RPC temporal mientras se arregla el token de MP
+      const { data, error } = await supabase.rpc('process_withdrawal', {
+        p_user_id: user.id,
+        p_amount: amount,
+        p_description: `Retiro a ${user.mp_withdrawal_email}`
+      });
+
+      if (error) {
+        console.error('❌ Error processing withdrawal:', error);
+        return { success: false, message: 'Error al procesar el retiro.' };
+      }
+
+      console.log('✅ Withdrawal processed successfully:', data);
+
+      if (data.success) {
+        // Actualizar el saldo local
+        updateProfile({ balance: data.new_balance });
+        return { 
+          success: true, 
+          message: 'Retiro procesado exitosamente. Los fondos se transferirán manualmente.',
+          newBalance: data.new_balance
+        };
+      } else {
+        return { success: false, message: data.message };
+      }
+    } catch (error) {
+      console.error('Error in withdrawFunds:', error);
+      return { success: false, message: 'Error inesperado al procesar el retiro.' };
     }
-    // Lógica de retiro real con la API de Mercado Pago iría aquí
-    const newBalance = user.balance - amount;
-    await updateProfile({ balance: newBalance });
-    await addTransaction(user.id, -amount, 'withdrawal', description);
-    return { success: true };
-  }, [user, updateProfile, addTransaction]);
+  }, [user, updateProfile]);
 
   const moveFromBalanceToEscrow = useCallback(async (amount, description) => {
     if (!user || (user.balance || 0) < amount) {
       return { success: false, message: 'Saldo insuficiente para realizar el pago.' };
     }
-    const newBalance = user.balance - amount;
-    const newEscrow = (user.escrow || 0) + amount;
-    await updateProfile({ balance: newBalance, escrow: newEscrow });
-    await addTransaction(user.id, -amount, 'escrow_payment', description);
-    return { success: true };
+
+    try {
+      const newBalance = user.balance - amount;
+      const newEscrow = (user.escrow || 0) + amount;
+      
+      // Actualizar perfil de forma atómica
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ 
+          balance: newBalance, 
+          escrow: newEscrow,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Error updating user balance:', updateError);
+        return { success: false, message: 'Error al procesar el pago. Inténtalo de nuevo.' };
+      }
+
+      // Agregar transacción
+      await addTransaction(user.id, -amount, 'escrow_payment', description);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error in moveFromBalanceToEscrow:', error);
+      return { success: false, message: 'Error inesperado al procesar el pago.' };
+    }
   }, [user, updateProfile, addTransaction]);
 
   const moveFromEscrowToProvider = useCallback(async (providerId, amount, description) => {
     if (!user) return;
 
-    const { error: rpcError } = await supabase.rpc('release_escrow_payment', {
-        p_client_id: user.id,
+    try {
+      console.log('🚀 Starting moveFromEscrowToProvider:', { providerId, amount, description, clientId: user.id });
+      
+      // Usar la función RPC para liberar el pago
+      const { data, error } = await supabase.rpc('release_payment_to_provider', {
         p_provider_id: providerId,
-        p_amount: amount
-    });
-    
-    if (rpcError) {
-        console.error("Error releasing escrow payment:", rpcError);
+        p_client_id: user.id,
+        p_amount: amount,
+        p_description: description
+      });
+
+      if (error) {
+        console.error('❌ Error releasing payment:', error);
         return;
+      }
+
+      console.log('✅ Payment released successfully:', data);
+
+      // Actualizar el perfil del cliente localmente
+      updateProfile({ escrow: data.client_escrow });
+
+      console.log('✅ Payment released successfully to provider:', providerId, 'Amount:', amount);
+    } catch (error) {
+      console.error('Error in moveFromEscrowToProvider:', error);
     }
-
-    await addTransaction(user.id, -amount, 'escrow_release', `Liberación de fondos para proveedor`);
-    await addTransaction(providerId, amount, 'income', description);
-
-    // Refresh client's profile
-    const newEscrow = (user.escrow || 0) - amount;
-    updateProfile({ escrow: newEscrow });
-  }, [user, addTransaction, updateProfile]);
+  }, [user, updateProfile]);
 
   const value = {
     balance: user?.balance || 0,

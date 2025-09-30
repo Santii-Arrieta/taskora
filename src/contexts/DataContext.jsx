@@ -23,11 +23,13 @@ export const DataProvider = ({ children }) => {
     }, []);
 
     const addData = useCallback(async (table, item) => {
+        console.log(`Adding data to ${table}:`, item);
         const { data, error } = await supabase.from(table).insert([item]).select();
         if (error) {
             console.error(`Error inserting into ${table}:`, error);
             return null;
         }
+        console.log(`Successfully inserted into ${table}:`, data);
         return data ? data[0] : null;
     }, []);
 

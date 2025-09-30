@@ -20,7 +20,7 @@ const customIcon = new Icon({
 });
 
 // Componente de marcador optimizado con menos re-renders
-const DraggableMarker = React.memo(({ value, onChange, isDraggable = true }) => {
+const OptimizedDraggableMarker = React.memo(({ value, onChange, isDraggable = true }) => {
   const [position, setPosition] = useState(value);
   const map = useMap();
   const markerRef = useRef(null);
@@ -62,31 +62,102 @@ const DraggableMarker = React.memo(({ value, onChange, isDraggable = true }) => 
   );
 });
 
-DraggableMarker.displayName = 'DraggableMarker';
+OptimizedDraggableMarker.displayName = 'OptimizedDraggableMarker';
 
-const InvalidateSizeOnMount = () => {
+// Componente optimizado para invalidar tamaño del mapa
+const OptimizedInvalidateSize = React.memo(() => {
   const map = useMap();
   const containerRef = map.getContainer();
+  const resizeTimeoutRef = useRef(null);
+
   useEffect(() => {
-    const invalidate = () => map.invalidateSize();
+    const invalidate = () => {
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+      resizeTimeoutRef.current = setTimeout(() => {
+        map.invalidateSize();
+      }, 100); // Debounce resize events
+    };
+
     invalidate();
-    const t = setTimeout(invalidate, 0);
+    
     let ro;
     if (containerRef && 'ResizeObserver' in window) {
-      ro = new ResizeObserver(() => invalidate());
+      ro = new ResizeObserver(invalidate);
       ro.observe(containerRef);
     }
+    
     window.addEventListener('resize', invalidate);
+    
     return () => {
-      clearTimeout(t);
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
       window.removeEventListener('resize', invalidate);
       if (ro && containerRef) ro.unobserve(containerRef);
     };
-  }, [map]);
-  return null;
-};
+  }, [map, containerRef]);
 
-const LocationPicker = ({ value, onChange, radius = 10, showSearch = true, isDraggable = true, onSearchSubmit, height = '60vh', showRadius = true }) => {
+  return null;
+});
+
+OptimizedInvalidateSize.displayName = 'OptimizedInvalidateSize';
+
+// Componente de eventos del mapa optimizado
+const OptimizedMapEvents = React.memo(({ onMapClick, isDraggable }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (!isDraggable) return;
+    
+    const handleClick = (e) => {
+      onMapClick(e);
+    };
+    
+    map.on('click', handleClick);
+    
+    return () => {
+      map.off('click', handleClick);
+    };
+  }, [map, onMapClick, isDraggable]);
+
+  return null;
+});
+
+OptimizedMapEvents.displayName = 'OptimizedMapEvents';
+
+// Componente de círculo optimizado
+const OptimizedCircle = React.memo(({ center, radius }) => {
+  if (!center || !radius) return null;
+  
+  return (
+    <Circle
+      center={center}
+      pathOptions={{ 
+        color: 'blue', 
+        fillColor: 'blue', 
+        fillOpacity: 0.2,
+        weight: 2
+      }}
+      radius={radius * 1000} // radius in meters
+    />
+  );
+});
+
+OptimizedCircle.displayName = 'OptimizedCircle';
+
+// Componente principal optimizado
+const OptimizedLocationPicker = ({ 
+  value, 
+  onChange, 
+  radius = 10, 
+  showSearch = true, 
+  isDraggable = true, 
+  onSearchSubmit, 
+  height = '60vh', 
+  showRadius = true 
+}) => {
   const [currentValue, setCurrentValue] = useState(value);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentRadius, setCurrentRadius] = useState(radius);
@@ -175,11 +246,6 @@ const LocationPicker = ({ value, onChange, radius = 10, showSearch = true, isDra
     return currentValue ? 13 : 6; // Zoom más amplio si no hay ubicación específica
   }, [currentValue]);
 
-  const MapEvents = () => {
-    useMap().on('click', handleMapClick);
-    return null;
-  };
-
   return (
     <div className="space-y-4">
       {showSearch && (
@@ -234,7 +300,7 @@ const LocationPicker = ({ value, onChange, radius = 10, showSearch = true, isDra
             whenReady={handleMapLoad}
             preferCanvas={true} // Usar canvas para mejor rendimiento
           >
-            <InvalidateSizeOnMount />
+            <OptimizedInvalidateSize />
             
             {/* Usar tiles más pequeños y optimizados */}
             <TileLayer
@@ -246,26 +312,21 @@ const LocationPicker = ({ value, onChange, radius = 10, showSearch = true, isDra
               zoomOffset={0}
             />
             
-            <DraggableMarker 
+            <OptimizedDraggableMarker 
               value={currentValue} 
               onChange={onChange} 
               isDraggable={isDraggable} 
             />
             
-            {currentValue && currentRadius && (
-              <Circle
-                center={currentValue}
-                pathOptions={{ 
-                  color: 'blue', 
-                  fillColor: 'blue', 
-                  fillOpacity: 0.2,
-                  weight: 2
-                }}
-                radius={currentRadius * 1000} // radius in meters
-              />
-            )}
+            <OptimizedCircle 
+              center={currentValue} 
+              radius={currentRadius} 
+            />
             
-            <MapEvents />
+            <OptimizedMapEvents 
+              onMapClick={handleMapClick} 
+              isDraggable={isDraggable} 
+            />
           </MapContainer>
         </Suspense>
       </div>
@@ -280,4 +341,4 @@ const LocationPicker = ({ value, onChange, radius = 10, showSearch = true, isDra
   );
 };
 
-export default LocationPicker;
+export default OptimizedLocationPicker;

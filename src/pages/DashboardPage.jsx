@@ -15,6 +15,8 @@ import ContractsTab from '@/components/dashboard/ContractsTab';
 import DashboardStats from '@/components/dashboard/DashboardStats';
 import ApplicantsTab from '@/components/dashboard/ApplicantsTab';
 import ApplicationsTab from '@/components/dashboard/ApplicationsTab';
+import UserBulkDataManager from '@/components/dashboard/UserBulkDataManager';
+import ContractsDebug from '@/components/debug/ContractsDebug';
 
 function useQuery() {
   const navigate = useNavigate();
@@ -231,22 +233,31 @@ const DashboardPage = () => {
 
           {(user.userType === 'client' || user.userType === 'provider') && (
             <TabsContent value="contracts">
-              <ContractsTab 
-                contracts={contracts} 
-                user={user}
-                onMarkAsCompleted={markAsCompletedByProvider}
-                onConfirmCompletion={confirmCompletionAndReleasePayment}
-                onAddReview={handleAddReview}
-              />
+              <div className="space-y-4">
+                <ContractsDebug />
+                <ContractsTab 
+                  contracts={contracts} 
+                  user={user}
+                  onMarkAsCompleted={markAsCompletedByProvider}
+                  onConfirmCompletion={confirmCompletionAndReleasePayment}
+                  onAddReview={handleAddReview}
+                />
+              </div>
             </TabsContent>
           )}
           
           {(user.userType === 'provider' || user.userType === 'ngo') && (
             <TabsContent value="publications">
-              <PublicationsTab 
-                briefs={briefs}
-                setBriefs={setBriefs}
-              />
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Mis Publicaciones</h3>
+                  <UserBulkDataManager onComplete={() => loadBriefs()} />
+                </div>
+                <PublicationsTab 
+                  briefs={briefs}
+                  setBriefs={setBriefs}
+                />
+              </div>
             </TabsContent>
           )}
 

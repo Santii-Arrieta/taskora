@@ -94,7 +94,7 @@ const ContractCard = ({ contract, user, onMarkAsCompleted, onConfirmCompletion, 
           <p>Precio: <span className="font-bold text-green-600">${contract.price}<span className="ml-1 font-semibold">{(contract.priceType || 'total') === 'por_hora' ? '/hora' : '/unico'}</span></span></p>
           <Badge variant={contract.status === 'completed' ? 'success' : 'default'}>
             {contract.status === 'active' && 'Activo'}
-            {contract.status === 'completed' && 'Completado'}
+            {contract.status === 'completed' && (isProvider ? 'Entregado' : 'Completado')}
           </Badge>
         </div>
         <div className="mt-4 space-y-2 text-sm">
@@ -111,7 +111,7 @@ const ContractCard = ({ contract, user, onMarkAsCompleted, onConfirmCompletion, 
       <CardFooter className="flex gap-2">
         {isProvider && !contract.completedByProvider && contract.status === 'active' && (
           <Button onClick={() => onMarkAsCompleted(contract.id)}>
-            <Check className="w-4 h-4 mr-2" /> Marcar como Realizado
+            <Check className="w-4 h-4 mr-2" /> Marcar como Entregado
           </Button>
         )}
         {!isProvider && contract.completedByProvider && !contract.completedByClient && contract.status === 'active' && (
@@ -119,7 +119,7 @@ const ContractCard = ({ contract, user, onMarkAsCompleted, onConfirmCompletion, 
             <CheckCircle className="w-4 h-4 mr-2" /> Confirmar y Liberar Pago
           </Button>
         )}
-        {contract.status === 'completed' && (
+        {contract.status === 'completed' && !isProvider && (
           <ReviewDialog contract={contract} onAddReview={onAddReview} user={user} />
         )}
       </CardFooter>
@@ -134,11 +134,32 @@ const ContractsTab = ({ contracts, user, onMarkAsCompleted, onConfirmCompletion,
     return false;
   });
 
+  // Determinar el título y descripción según el tipo de usuario
+  const getTitleAndDescription = () => {
+    if (user.userType === 'client') {
+      return {
+        title: 'Trabajos Realizados',
+        description: 'Servicios que has contratado y pagado.'
+      };
+    } else if (user.userType === 'provider' || user.userType === 'ngo') {
+      return {
+        title: 'Trabajos Otorgados',
+        description: 'Servicios que has ofrecido y entregado.'
+      };
+    }
+    return {
+      title: 'Trabajos',
+      description: 'Gestiona tus trabajos activos y completados.'
+    };
+  };
+
+  const { title, description } = getTitleAndDescription();
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Trabajos</CardTitle>
-        <CardDescription>Gestiona tus trabajos activos y completados.</CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {userContracts.length > 0 ? (
@@ -155,8 +176,15 @@ const ContractsTab = ({ contracts, user, onMarkAsCompleted, onConfirmCompletion,
         ) : (
           <div className="text-center p-8">
             <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium">No tienes trabajos.</h3>
-            <p className="text-gray-600">Los trabajos que contrates o te contraten aparecerán aquí.</p>
+            <h3 className="text-lg font-medium">
+              {user.userType === 'client' ? 'No tienes trabajos realizados.' : 'No tienes trabajos otorgados.'}
+            </h3>
+            <p className="text-gray-600">
+              {user.userType === 'client' 
+                ? 'Los servicios que contrates aparecerán aquí.' 
+                : 'Los servicios que ofrezcas aparecerán aquí.'
+              }
+            </p>
           </div>
         )}
       </CardContent>
