@@ -12,6 +12,8 @@ const ApplicationsTab = ({ applications }) => {
         return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Aceptada</Badge>;
       case 'rejected':
         return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Rechazada</Badge>;
+      case 'completed':
+        return <Badge className="bg-blue-100 text-blue-800"><CheckCircle className="w-3 h-3 mr-1" />Finalizado</Badge>;
       default:
         return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />Pendiente</Badge>;
     }
@@ -51,7 +53,7 @@ const ApplicationsTab = ({ applications }) => {
                           Postulaste a la ONG: <span className="font-medium text-primary">{app.ngoName}</span>
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Fecha de postulación: {new Date(app.appliedDate).toLocaleDateString()}
+                          Fecha de postulación: {app.appliedDate ? new Date(app.appliedDate).toLocaleDateString('es-ES') : 'Fecha no disponible'}
                         </p>
                       </div>
                       <div className="ml-4">

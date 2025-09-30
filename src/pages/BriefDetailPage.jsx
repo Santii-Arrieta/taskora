@@ -159,19 +159,63 @@ const BriefDetailPage = () => {
     if(brief.userId === user.id) return toast({ title: "Acción no permitida", description: "No puedes postularte a tu propia oportunidad.", variant: 'destructive' });
     
     if(brief) {
+      console.log('🔍 Current brief applications:', brief.applications);
+      console.log('🔍 User ID:', user.id);
+      console.log('🔍 User name:', user.name);
+      
       if (!brief.applications.some(app => app.id === user.id)) {
-        const newApplications = [...brief.applications, { id: user.id, name: user.name, date: new Date().toISOString(), status: 'pending' }];
-        await updateData('briefs', briefId, { applications: newApplications });
+        const newApplication = { 
+          id: user.id, 
+          name: user.name, 
+          date: new Date().toISOString(), 
+          status: 'pending' 
+        };
+        const newApplications = [...brief.applications, newApplication];
         
-        setBrief(prev => ({...prev, applications: newApplications}));
-
-        addNotification({
-          userId: brief.userId,
-          title: "Nueva postulación",
-          description: `${user.name} se ha postulado a tu oportunidad "${brief.title}"`
+        console.log('📝 Adding new application:', newApplication);
+        console.log('📝 New applications array:', newApplications);
+        
+        // Usar función RPC para agregar aplicación (bypass RLS)
+        console.log('🔄 Using RPC function to add application...');
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('add_application_to_brief', {
+          brief_id: briefId,
+          user_id: user.id,
+          user_name: user.name,
+          application_status: 'pending'
         });
+        
+        console.log('🔍 RPC result:', rpcResult);
+        console.log('🔍 RPC error:', rpcError);
+        
+        if (rpcError) {
+          console.error('❌ RPC function failed:', rpcError);
+          toast({ 
+            title: 'Error de base de datos', 
+            description: `Error: ${rpcError.message}`, 
+            variant: 'destructive' 
+          });
+          return;
+        }
+        
+        if (rpcResult && rpcResult.success) {
+          console.log('✅ RPC function successful, updating local state');
+          setBrief(prev => ({...prev, applications: rpcResult.applications}));
 
-        toast({ title: 'Postulación enviada', description: 'Tu postulación ha sido enviada con éxito.' });
+          addNotification({
+            userId: brief.userId,
+            title: "Nueva postulación",
+            description: `${user.name} se ha postulado a tu oportunidad "${brief.title}"`
+          });
+
+          toast({ title: 'Postulación enviada', description: 'Tu postulación ha sido enviada con éxito.' });
+        } else {
+          console.error('❌ RPC function returned failure:', rpcResult);
+          toast({ 
+            title: 'Error', 
+            description: rpcResult?.message || 'No se pudo enviar la postulación.', 
+            variant: 'destructive' 
+          });
+        }
       } else {
         toast({ title: 'Ya te has postulado', description: 'Ya te has postulado a esta oportunidad.', variant: 'destructive' });
       }

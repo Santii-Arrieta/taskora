@@ -15,8 +15,7 @@ import ContractsTab from '@/components/dashboard/ContractsTab';
 import DashboardStats from '@/components/dashboard/DashboardStats';
 import ApplicantsTab from '@/components/dashboard/ApplicantsTab';
 import ApplicationsTab from '@/components/dashboard/ApplicationsTab';
-import UserBulkDataManager from '@/components/dashboard/UserBulkDataManager';
-import ContractsDebug from '@/components/debug/ContractsDebug';
+import VolunteerApplicationsCard from '@/components/dashboard/VolunteerApplicationsCard';
 
 function useQuery() {
   const navigate = useNavigate();
@@ -54,7 +53,8 @@ const DashboardPage = () => {
       { value: 'overview', label: 'Resumen', icon: <BarChart2 className="w-4 h-4 mr-2" /> },
       { value: 'contracts', label: 'Mis Trabajos', icon: <Briefcase className="w-4 h-4 mr-2" /> },
       { value: 'publications', label: 'Mis Publicaciones', icon: <FileText className="w-4 h-4 mr-2" /> },
-      { value: 'applications', label: 'Mis Postulaciones', icon: <UserCheck className="w-4 h-4 mr-2" /> }
+      { value: 'applications', label: 'Mis Postulaciones', icon: <UserCheck className="w-4 h-4 mr-2" /> },
+      { value: 'volunteer-applications', label: 'Mis Voluntariados', icon: <Heart className="w-4 h-4 mr-2" /> }
     ],
     ngo: [
       { value: 'overview', label: 'Métricas', icon: <BarChart2 className="w-4 h-4 mr-2" /> },
@@ -68,7 +68,11 @@ const DashboardPage = () => {
 
   const loadUserData = useCallback(async () => {
     if(!user) return;
+    console.log('🔄 Loading user data for:', user.id, user.userType);
+    
     const allBriefs = await getData('briefs');
+    console.log('📋 All briefs loaded:', allBriefs.length);
+    
     const allReviews = await getData('reviews');
     
     const userBriefs = allBriefs.filter(brief => brief.userId === user.id);
@@ -78,20 +82,35 @@ const DashboardPage = () => {
     setReviews(userReviews);
 
     if (user.userType === 'ngo') {
-      const myApplicants = userBriefs.flatMap(b => b.applications.map(app => ({...app, briefId: b.id, briefTitle: b.title})));
+      const myApplicants = userBriefs.flatMap(b => {
+        console.log('📝 Brief applications:', b.title, b.applications);
+        const applications = b.applications || []; // Asegurar que applications existe
+        return applications.map(app => ({...app, briefId: b.id, briefTitle: b.title}));
+      });
+      console.log('👥 My applicants:', myApplicants);
       setApplicants(myApplicants);
     }
 
     if (user.userType === 'provider') {
       const myApplications = allBriefs
-        .filter(b => b.applications?.some(app => app.id === user.id))
-        .map(b => ({
-          briefId: b.id,
-          briefTitle: b.title,
-          ngoName: b.userName,
-          status: b.applications.find(app => app.id === user.id).status,
-          appliedDate: b.applications.find(app => app.id === user.id).date,
-        }));
+        .filter(b => {
+          const applications = b.applications || []; // Asegurar que applications existe
+          const hasApplication = applications.some(app => app.id === user.id);
+          console.log('🔍 Checking brief:', b.title, 'has application:', hasApplication, 'applications:', applications);
+          return hasApplication;
+        })
+        .map(b => {
+          const applications = b.applications || [];
+          const userApplication = applications.find(app => app.id === user.id);
+          return {
+            briefId: b.id,
+            briefTitle: b.title,
+            ngoName: b.userName,
+            status: userApplication?.status || 'pending',
+            appliedDate: userApplication?.date || new Date().toISOString(),
+          };
+        });
+      console.log('📄 My applications:', myApplications);
       setApplications(myApplications);
     }
   }, [user, getData]);
@@ -233,37 +252,35 @@ const DashboardPage = () => {
 
           {(user.userType === 'client' || user.userType === 'provider') && (
             <TabsContent value="contracts">
-              <div className="space-y-4">
-                <ContractsDebug />
-                <ContractsTab 
-                  contracts={contracts} 
-                  user={user}
-                  onMarkAsCompleted={markAsCompletedByProvider}
-                  onConfirmCompletion={confirmCompletionAndReleasePayment}
-                  onAddReview={handleAddReview}
-                />
-              </div>
+              <ContractsTab 
+                contracts={contracts} 
+                user={user}
+                onMarkAsCompleted={markAsCompletedByProvider}
+                onConfirmCompletion={confirmCompletionAndReleasePayment}
+                onAddReview={handleAddReview}
+              />
             </TabsContent>
           )}
           
           {(user.userType === 'provider' || user.userType === 'ngo') && (
             <TabsContent value="publications">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold">Mis Publicaciones</h3>
-                  <UserBulkDataManager onComplete={() => loadBriefs()} />
-                </div>
-                <PublicationsTab 
-                  briefs={briefs}
-                  setBriefs={setBriefs}
-                />
-              </div>
+              <PublicationsTab 
+                briefs={briefs}
+                setBriefs={setBriefs}
+              />
             </TabsContent>
           )}
 
           {user.userType === 'provider' && (
             <TabsContent value="applications">
               <ApplicationsTab applications={applications} />
+            </TabsContent>
+          )}
+          
+          {/* Tab para voluntarios - ver sus aplicaciones */}
+          {user.userType === 'provider' && (
+            <TabsContent value="volunteer-applications">
+              <VolunteerApplicationsCard user={user} />
             </TabsContent>
           )}
         </Tabs>

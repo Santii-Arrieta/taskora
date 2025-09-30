@@ -41,8 +41,6 @@ const BlogManagementTab = () => {
   const [isAttendeesDialogOpen, setIsAttendeesDialogOpen] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
   const [postData, setPostData] = useState(initialPostState);
-  const [attendees, setAttendees] = useState([]);
-  const imageInputRef = useRef(null);
 
   const fetchPosts = async () => {
     setIsLoading(true);
@@ -58,6 +56,7 @@ const BlogManagementTab = () => {
   useEffect(() => {
     fetchPosts();
   }, []);
+
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];

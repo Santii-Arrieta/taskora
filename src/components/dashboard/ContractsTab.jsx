@@ -79,14 +79,16 @@ const ReviewDialog = ({ contract, onAddReview, user }) => {
 
 const ContractCard = ({ contract, user, onMarkAsCompleted, onConfirmCompletion, onAddReview }) => {
   const isProvider = user.id === contract.providerId;
-  const otherPartyName = isProvider ? contract.clientName : contract.providerName;
+  // Usar los nombres reales de los usuarios
+  const otherPartyName = isProvider ? contract.client?.name : contract.provider?.name;
+  const otherPartyLabel = isProvider ? 'Cliente' : 'Proveedor';
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>{contract.title}</CardTitle>
         <CardDescription>
-          {isProvider ? `Cliente: ${otherPartyName}` : `Proveedor: ${otherPartyName}`}
+          {otherPartyLabel}: {otherPartyName || 'Usuario no encontrado'}
         </CardDescription>
       </CardHeader>
       <CardContent>

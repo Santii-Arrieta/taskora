@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, FileText, BarChart2, AlertTriangle, Briefcase, MessageCircle, Sun, Moon, Settings, Rss, UserPlus, LifeBuoy, Newspaper, DollarSign } from 'lucide-react';
+import { Shield, Users, FileText, BarChart2, AlertTriangle, Briefcase, MessageCircle, Sun, Moon, Settings, Rss, UserPlus, LifeBuoy, Newspaper } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import VerificationsTab from '@/components/admin/VerificationsTab';
 import UsersTab from '@/components/admin/UsersTab';
@@ -17,20 +17,11 @@ import BlogManagementTab from '@/components/admin/BlogManagementTab';
 import AdminsTab from '@/components/admin/AdminsTab';
 import SupportTab from '@/components/admin/SupportTab';
 import NewsletterTab from '@/components/admin/NewsletterTab';
+import CommunityTab from '@/components/admin/CommunityTab';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/lib/customSupabaseClient';
 import ContentTab from '@/components/admin/ContentTab';
-import { 
-  UsersBulkManager, 
-  BriefsBulkManager, 
-  BlogBulkManager, 
-  SupportBulkManager, 
-  NewsletterBulkManager,
-  CategoriesBulkManager,
-  ReviewsBulkManager
-} from '@/components/admin/BulkDataManager';
-import DuplicatePaymentsManager from '@/components/admin/DuplicatePaymentsManager';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -93,7 +84,7 @@ const AdminDashboard = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     if (user?.userType === 'admin') {
@@ -101,7 +92,7 @@ const AdminDashboard = () => {
     } else if (user && user.userType !== 'admin') {
       navigate('/dashboard');
     }
-  }, [user, navigate, loadData]);
+  }, [user, navigate]);
 
   const handleVerifyUser = async (userId, userType) => {
     const { error } = await supabase.rpc('approve_verification', { p_user_id: userId, p_user_type: userType });
@@ -165,10 +156,9 @@ const AdminDashboard = () => {
     { value: "users", label: "Usuarios", icon: Users },
     { value: "admins", label: "Admins", icon: UserPlus },
     { value: "content", label: "Contenido", icon: Briefcase },
-    { value: "blog", label: "Comunidad", icon: Rss },
+    { value: "community", label: "Comunidad", icon: Rss },
     { value: "support", label: "Soporte", icon: LifeBuoy },
     { value: "newsletter", label: "Newsletter", icon: Newspaper },
-    { value: "payments", label: "Pagos", icon: DollarSign },
     { value: "analytics", label: "Analíticas", icon: BarChart2 },
     { value: "settings", label: "Ajustes", icon: Settings },
   ];
@@ -207,7 +197,6 @@ const AdminDashboard = () => {
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <h3 className="text-lg font-semibold">Gestión de Usuarios</h3>
-                          <UsersBulkManager onComplete={loadData} />
                         </div>
                         <UsersTab users={data.allUsers} stats={stats} setAllUsers={setAllUsers} />
                       </div>
@@ -217,25 +206,17 @@ const AdminDashboard = () => {
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <h3 className="text-lg font-semibold">Gestión de Servicios</h3>
-                          <BriefsBulkManager onComplete={loadData} />
                         </div>
                         <ContentTab briefs={data.allBriefs} />
                       </div>
                     </TabsContent>
-                    <TabsContent value="blog" className="m-0">
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                          <h3 className="text-lg font-semibold">Gestión de Blog</h3>
-                          <BlogBulkManager onComplete={loadData} />
-                        </div>
-                        <BlogManagementTab />
-                      </div>
+                    <TabsContent value="community" className="m-0">
+                      <CommunityTab />
                     </TabsContent>
                     <TabsContent value="support" className="m-0">
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <h3 className="text-lg font-semibold">Gestión de Soporte</h3>
-                          <SupportBulkManager onComplete={loadData} />
                         </div>
                         <SupportTab tickets={data.supportTickets} setData={setData} />
                       </div>
@@ -244,13 +225,9 @@ const AdminDashboard = () => {
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <h3 className="text-lg font-semibold">Gestión de Newsletter</h3>
-                          <NewsletterBulkManager onComplete={loadData} />
                         </div>
                         <NewsletterTab subscribers={data.newsletterSubscribers} />
                       </div>
-                    </TabsContent>
-                    <TabsContent value="payments" className="m-0">
-                      <DuplicatePaymentsManager />
                     </TabsContent>
                     <TabsContent value="analytics" className="m-0"><AnalyticsTab stats={stats} /></TabsContent>
                     <TabsContent value="settings" className="m-0"><SettingsTab /></TabsContent>

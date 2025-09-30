@@ -34,11 +34,13 @@ export const DataProvider = ({ children }) => {
     }, []);
 
     const updateData = useCallback(async (table, id, updates) => {
+        console.log(`🔄 Updating ${table} with id ${id}:`, updates);
         const { data, error } = await supabase.from(table).update(updates).eq('id', id).select();
         if (error) {
-            console.error(`Error updating ${table}:`, error);
+            console.error(`❌ Error updating ${table}:`, error);
             return null;
         }
+        console.log(`✅ Successfully updated ${table}:`, data);
         return data.length > 0 ? data[0] : null;
     }, []);
     

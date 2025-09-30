@@ -21,7 +21,11 @@ export const ContractProvider = ({ children }) => {
         console.log('Loading contracts for user:', user.id);
         const { data, error } = await supabase
           .from('contracts')
-          .select('*')
+          .select(`
+            *,
+            provider:providerId(name),
+            client:clientId(name)
+          `)
           .or(`providerId.eq.${user.id},clientId.eq.${user.id}`)
           .order('createdAt', { ascending: false })
           .limit(50);

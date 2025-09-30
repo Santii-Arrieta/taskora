@@ -28,6 +28,7 @@ import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useImageOptimization } from '@/hooks/useImageOptimization';
 import { ImageOptimizationStats } from '@/components/ui/image-optimization-stats';
+import ApplicationManagementCard from './ApplicationManagementCard';
 
 const LocationPicker = lazy(() => import('@/components/LocationPicker'));
 
@@ -231,7 +232,9 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
       <div className={`lg:col-span-${selectedBriefApplicants ? 2 : 3}`}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">{user.userType === 'ngo' ? 'Mis Oportunidades' : 'Mis Servicios'}</h2>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {user.userType === 'ngo' ? 'Mis Oportunidades de Voluntariado' : 'Mis Servicios'}
+            </h2>
             <Button onClick={() => setShowCreateForm(true)} disabled={!canCreateBrief}><Plus className="w-4 h-4 mr-2" />Crear Publicación</Button>
           </div>
           {showCreateForm && (
@@ -358,6 +361,7 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
               <Card><CardContent className="p-8 text-center"><Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" /><h3 className="text-lg font-medium text-gray-900">No tienes publicaciones</h3><p className="text-gray-600 mb-4">Crea tu primera publicación para empezar.</p><Button onClick={() => setShowCreateForm(true)} disabled={!canCreateBrief}><Plus className="w-4 h-4 mr-2" />Crear</Button></CardContent></Card>
             ) : (
               briefs.map((brief) => (
+                <React.Fragment key={brief.id}>
                 <Card key={brief.id} className="hover:shadow-md transition-shadow">
                   <CardHeader>
                     <div className="flex justify-between items-start">
@@ -400,7 +404,18 @@ const PublicationsTab = ({ briefs, setBriefs }) => {
                     </div>
                   </CardFooter>
                 </Card>
-              ))
+                
+                {user.userType === 'ngo' && brief.applications && brief.applications.length > 0 && (
+                  <ApplicationManagementCard 
+                    brief={brief} 
+                    onApplicationUpdate={() => {
+                      // Recargar briefs desde el componente padre
+                      window.location.reload();
+                    }}
+                  />
+                )}
+              </React.Fragment>
+            ))
             )}
           </div>
         </motion.div>
